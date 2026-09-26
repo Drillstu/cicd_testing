@@ -102,16 +102,19 @@ pipeline {
                 // 7. Arquiva o artefato final indexado
                 archiveArtifacts artifacts: "build/release_build_${env.BUILD_NUMBER}.xml", fingerprint: true
                 
-                // 8. Notificação segura para o Discord
+                // 8. Notificação segura para o Discord (Corrigida sem aspas simples internas)
                 withCredentials([string(credentialsId: env.DISCORD_WEBHOOK_ID, variable: 'WEBHOOK_SECRET')]) {
                     script {
                         def releasePayload = """{
-                            "content": "📦 **NOVA RELEASE DISPONÍVEL!**\\n**Projeto:** ${env.JOB_NAME}\\n**Branch:** ${env.BRANCH_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚀 *O artefato consolidado 'release_build_${env.BUILD_NUMBER}.xml' foi gerado com sucesso! O pacote já está arquivado no painel do Jenkins para download.*"
+                            "content": "📦 **NOVA RELEASE DISPONÍVEL!**\\n**Projeto:** ${env.JOB_NAME}\\n**Branch:** ${env.BRANCH_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚀 *O artefato consolidado release_build_${env.BUILD_NUMBER}.xml foi gerado com sucesso! O pacote já está arquivado no painel do Jenkins e pronto para ser implantado em Produção.*"
                         }"""
                         def jsonRelease = releasePayload.replaceAll('\n', '').replaceAll('\r', '')
-                        powershell "Invoke-RestMethod -Uri \$env:WEBHOOK_SECRET -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${jsonRelease}')) -ContentType 'application/json; charset=utf-8'"
+                        
+                        // FIX: Alterado de aspas simples para aspas duplas escapadas (\") no argumento do GetBytes para blindar o PowerShell
+                        powershell "Invoke-RestMethod -Uri \$env:WEBHOOK_SECRET -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes(\"${jsonRelease}\")) -ContentType 'application/json; charset=utf-8'"
                     }
                 }
+
             }
         }
     }
