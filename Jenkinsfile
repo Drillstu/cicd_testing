@@ -27,7 +27,7 @@ pipeline {
                 timeout(time: 1, unit: 'MINUTES')
             }
             steps {
-                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < D:\\IRIS_Server\\testes.script || exit 0'
+                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < D:\\IRIS_Server\\testes.script'
             }
         }
     }
