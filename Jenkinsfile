@@ -74,7 +74,7 @@ pipeline {
                 bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < D:\\IRIS_Server\\release.script || exit 0'
                 
                 // 2. O Windows renomeia o arquivo injetando de forma dinâmica o número do Build atual!
-                bat "ren \"C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\CICD_Testing (IRIS)@2\\build\\release.xml\" \"release_build_\_${env.BUILD_NUMBER}.xml\""
+                bat "ren \"C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\CICD_Testing (IRIS)@2\\build\\release.xml\" \"release_build_${env.BUILD_NUMBER}.xml\""
                 
                 // 3. O Jenkins arquiva o novo arquivo dinâmico na interface web
                 archiveArtifacts artifacts: "build/release_build_\_${env.BUILD_NUMBER}.xml", fingerprint: true
