@@ -79,16 +79,19 @@ pipeline {
             steps {
                 echo '📦 Testes aprovados! Gerando pacote consolidado .xml para produção...'
                 
-                // FIX 1: Passando as aspas e o caminho de forma "pura" com aspas simples para o CMD não quebrar
-                bat 'D:\\InterSystems\\IRIS\\bin\\irissession IRIS "%WORKSPACE%" 0 < D:\\IRIS_Server\\release.script || exit 0'
+                // CORREÇÃO DEFINITIVA: Cria a variável no Windows e chama o IRIS sem parâmetros inválidos
+                bat '''
+                    set JENKINS_WORKSPACE=%WORKSPACE%
+                    "D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < D:\\IRIS_Server\\release.script || exit 0
+                '''
                 
-                // FIX 2: Correção da sintaxe do comando ren do Windows
+                // Renomeia o arquivo gerado
                 bat "ren build\\release.xml release_build_${env.BUILD_NUMBER}.xml"
                 
-                // FIX 3: Ajustado o arquivamento para ler o arquivo renomeado dentro da pasta build
+                // Arquiva o arquivo que agora está na pasta correta do build atual!
                 archiveArtifacts artifacts: "build/release_build_${env.BUILD_NUMBER}.xml", fingerprint: true
                 
-                // FIX 4: Corrigido o ID da credencial e a injeção segura do endpoint no PowerShell
+                // Notificação segura usando withCredentials para não expor segredos no processo do Windows
                 withCredentials([string(credentialsId: env.DISCORD_WEBHOOK_ID, variable: 'WEBHOOK_SECRET')]) {
                     script {
                         def releasePayload = """{
