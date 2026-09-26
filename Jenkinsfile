@@ -76,7 +76,8 @@ pipeline {
                 echo '📦 Testes aprovados! Gerando pacote consolidado .xml para produção...'
                 
                 // 1. Passa a pasta do workspace atual como o primeiro argumento (%args(1)) para o IRIS
-                bat "\"D:\\InterSystems\\IRIS\\bin\\irissession\" IRIS < D:\\IRIS_Server\\release.script \"\${WORKSPACE}\" || exit 0"
+                // O argumento "${WORKSPACE}" deve vir logo após o nome da instância (IRIS), ANTES do sinal de menor que (<)
+                bat "\"D:\\InterSystems\\IRIS\\bin\\irissession\" IRIS \"\${WORKSPACE}\" < D:\\IRIS_Server\\release.script || exit 0"
                 
                 // 2. Renomeia usando caminhos relativos de forma simples e limpa, sem risco de errar caminhos longos
                 bat "ren build\\release.xml release_build_${env.BUILD_NUMBER}.xml"
