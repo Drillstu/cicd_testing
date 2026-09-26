@@ -8,8 +8,8 @@ pipeline {
     }
 
     environment {
-        // Cole sua URL aqui dentro das aspas simples
-        DISCORD_WEBHOOK = 'discord-webhook-url'
+        // FIX: Nome padronizado para bater com as chamadas de credenciais abaixo
+        DISCORD_WEBHOOK_ID = 'discord-webhook-url'
     }
     
     stages {
@@ -44,9 +44,7 @@ pipeline {
                     not { branch 'production' }
                     
                     // 3. A mensagem do commit NÃO pode conter o texto '[skip test]' ou '[skip ci]'
-                    // Lógica simplificada: lê a mensagem uma única vez e valida os dois termos com OU (||)
                     expression { 
-                        // Forma segura e aceita pelo Sandbox para consolidar as mensagens do commit
                         def changeLogSets = currentBuild.changeSets
                         def commitMessage = changeLogSets.collect { set -> set.items.collect { item -> item.msg }.join(' ') }.join(' ')
                         return !commitMessage.contains('[skip test]') && !commitMessage.contains('[skip ci]')
@@ -81,25 +79,23 @@ pipeline {
             steps {
                 echo '📦 Testes aprovados! Gerando pacote consolidado .xml para produção...'
                 
-                // 1. Passa a pasta do workspace atual como o primeiro argumento (%args(1)) para o IRIS
-                // O argumento "${WORKSPACE}" deve vir logo após o nome da instância (IRIS), ANTES do sinal de menor que (<)
-                bat "\"D:\\InterSystems\\IRIS\\bin\\irissession\" IRIS \"\${WORKSPACE}\" < D:\\IRIS_Server\\release.script || exit 0"
+                // FIX 1: Passando as aspas e o caminho de forma "pura" com aspas simples para o CMD não quebrar
+                bat 'D:\\InterSystems\\IRIS\\bin\\irissession IRIS "%WORKSPACE%" 0 < D:\\IRIS_Server\\release.script || exit 0'
                 
-                // 2. Renomeia usando caminhos relativos de forma simples e limpa, sem risco de errar caminhos longos
+                // FIX 2: Correção da sintaxe do comando ren do Windows
                 bat "ren build\\release.xml release_build_${env.BUILD_NUMBER}.xml"
-
                 
-                // 3. Arquiva o arquivo que agora está na pasta correta do build atual!
+                // FIX 3: Ajustado o arquivamento para ler o arquivo renomeado dentro da pasta build
                 archiveArtifacts artifacts: "build/release_build_${env.BUILD_NUMBER}.xml", fingerprint: true
                 
-                // 4. Notificação segura usando withCredentials para não expor segredos no processo do Windows
+                // FIX 4: Corrigido o ID da credencial e a injeção segura do endpoint no PowerShell
                 withCredentials([string(credentialsId: env.DISCORD_WEBHOOK_ID, variable: 'WEBHOOK_SECRET')]) {
                     script {
                         def releasePayload = """{
                             "content": "📦 **NOVA RELEASE DISPONÍVEL!**\\n**Projeto:** ${env.JOB_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚀 *O artefato consolidado 'release_build_${env.BUILD_NUMBER}.xml' foi gerado com sucesso, livre de classes de teste! O pacote já está arquivado no painel do Jenkins e pronto para ser implantado em Produção.*"
                         }"""
                         def jsonRelease = releasePayload.replaceAll('\n', '').replaceAll('\r', '')
-                        powershell "Invoke-RestMethod -Uri '${env.DISCORD_WEBHOOK}' -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${jsonRelease}')) -ContentType 'application/json; charset=utf-8'"
+                        powershell "Invoke-RestMethod -Uri \$env:WEBHOOK_SECRET -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${jsonRelease}')) -ContentType 'application/json; charset=utf-8'"
                     }
                 }
             }
@@ -109,28 +105,24 @@ pipeline {
     post {
         failure {
             echo '🚨 Os testes falharam! Voltando o servidor para o estado anterior usando o backup...'
-            // O rollback agora reimporta o XML original salvo no Estágio 3
             bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < D:\\IRIS_Server\\rollback.script || exit 0'
 
+            // FIX: Mapeamento de credencial corrigido para evitar o NullPointerException
             withCredentials([string(credentialsId: env.DISCORD_WEBHOOK_ID, variable: 'WEBHOOK_SECRET')]) {
-                // O bloco script permite criar variáveis Groovy locais sem quebrar o compilador do Jenkins
                 script {
-                    // Formatado direto no Groovy com quebras de linha reais
                     def msgPayload = """{
                         "content": "❌ **Pipeline FALHOU!**\\n**Projeto:** ${env.JOB_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚨 *Os testes unitários falharam ou a esteira quebrou. O procedimento de Rollback automático foi executado e o servidor foi restaurado.*"
                     }"""
 
-                    // Remove quebras de linha da string do payload para enviar um JSON limpo em uma linha só para a API
                     def jsonPronto = msgPayload.replaceAll('\n', '').replaceAll('\r', '')
-                    
-                    // Injeta o JSON pronto direto no comando sem passar por conversões do PowerShell
-                    powershell "Invoke-RestMethod -Uri '${env.DISCORD_WEBHOOK}' -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${jsonPronto}')) -ContentType 'application/json; charset=utf-8'"
+                    powershell "Invoke-RestMethod -Uri \$env:WEBHOOK_SECRET -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${jsonPronto}')) -ContentType 'application/json; charset=utf-8'"
                 }
             }
        }
         success {
             echo '✅ Pipeline concluído com sucesso. Nenhuma falha detectada!'
 
+            // FIX: Mapeamento de credencial corrigido para evitar o NullPointerException
             withCredentials([string(credentialsId: env.DISCORD_WEBHOOK_ID, variable: 'WEBHOOK_SECRET')]) {
                 script {
                     def msgPayload = """{
@@ -138,8 +130,7 @@ pipeline {
                     }"""
                     
                     def jsonPronto = msgPayload.replaceAll('\n', '').replaceAll('\r', '')
-                    
-                    powershell "Invoke-RestMethod -Uri '${env.DISCORD_WEBHOOK}' -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${jsonPronto}')) -ContentType 'application/json; charset=utf-8'"
+                    powershell "Invoke-RestMethod -Uri \$env:WEBHOOK_SECRET -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${jsonPronto}')) -ContentType 'application/json; charset=utf-8'"
                 }
             }
         }
