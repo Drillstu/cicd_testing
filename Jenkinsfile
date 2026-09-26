@@ -68,15 +68,15 @@ pipeline {
             }
             steps {
                 echo '📦 Testes aprovados! Gerando pacote consolidado .xml para produção...'
-                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < D:\\IRIS_Server\\release.script || exit 0'
                 
-                // 1. O IRIS gera o arquivo base 'release.xml'
-                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < D:\\IRIS_Server\\release.script || exit 0'
+                // 1. Passa a pasta do workspace atual como o primeiro argumento (%args(1)) para o IRIS
+                bat "\"D:\\InterSystems\\IRIS\\bin\\irissession\" IRIS < D:\\IRIS_Server\\release.script \"\${WORKSPACE}\" || exit 0"
                 
-                // 2. O Windows renomeia o arquivo injetando de forma dinâmica o número do Build atual!
-                bat "ren \"C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\CICD_Testing (IRIS)@2\\build\\release.xml\" \"release_build_${env.BUILD_NUMBER}.xml\""
+                // 2. Renomeia usando caminhos relativos de forma simples e limpa, sem risco de errar caminhos longos
+                bat "ren build\\release.xml release_build_${env.BUILD_NUMBER}.xml"
+
                 
-                // 3. O Jenkins arquiva o novo arquivo dinâmico na interface web
+                // 3. Arquiva o arquivo que agora está na pasta correta do build atual!
                 archiveArtifacts artifacts: "build/release_build_${env.BUILD_NUMBER}.xml", fingerprint: true
                 
                 // Alerta dedicado de Liberação de Release para o time no Discord
