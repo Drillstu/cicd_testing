@@ -79,7 +79,7 @@ pipeline {
                         "content": "📦 **NOVA RELEASE DISPONÍVEL!**\\n**Projeto:** ${env.JOB_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚀 *O artefato consolidado 'release.xml' foi gerado com sucesso, livre de classes de teste! O pacote já está arquivado no painel do Jenkins e pronto para ser implantado em Produção.*"
                     }"""
                     def jsonRelease = releasePayload.replaceAll('\n', '').replaceAll('\r', '')
-                    powershell "Invoke-RestMethod -Uri '\({env.DISCORD_WEBHOOK}' -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('\){jsonRelease}')) -ContentType 'application/json; charset=utf-8'"
+                    powershell "Invoke-RestMethod -Uri '${env.DISCORD_WEBHOOK}' -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${jsonRelease}')) -ContentType 'application/json; charset=utf-8'"
                 }
             }
         }
@@ -102,7 +102,7 @@ pipeline {
                 def jsonPronto = msgPayload.replaceAll('\n', '').replaceAll('\r', '')
                 
                 // Injeta o JSON pronto direto no comando sem passar por conversões do PowerShell
-                powershell "Invoke-RestMethod -Uri '${env.DISCORD_WEBHOOK}' -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${msgPayload.replaceAll('\n', '').replaceAll('\r', '')}')) -ContentType 'application/json; charset=utf-8'"
+                powershell "Invoke-RestMethod -Uri '${env.DISCORD_WEBHOOK}' -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${jsonPronto)}')) -ContentType 'application/json; charset=utf-8'"
             }
        }
         success {
@@ -115,7 +115,7 @@ pipeline {
                 
                 def jsonPronto = msgPayload.replaceAll('\n', '').replaceAll('\r', '')
                 
-                powershell "Invoke-RestMethod -Uri '${env.DISCORD_WEBHOOK}' -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${msgPayload.replaceAll('\n', '').replaceAll('\r', '')}')) -ContentType 'application/json; charset=utf-8'"
+                powershell "Invoke-RestMethod -Uri '${env.DISCORD_WEBHOOK}' -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${jsonPronto)}')) -ContentType 'application/json; charset=utf-8'"
             }
         }
     }
