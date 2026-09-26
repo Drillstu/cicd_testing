@@ -61,15 +61,11 @@ pipeline {
         stage('5. Gerar Artefato de Release') {
             when {
                 expression { 
-                    // 1. Tenta pegar pelo histórico do Jenkins
                     def changeLogSets = currentBuild.changeSets
                     def commitMessage = changeLogSets.collect { set -> set.items.collect { item -> item.msg }.join(' ') }.join(' ')
-                    
-                    // 2. SE o histórico estiver vazio (primeiro build), busca direto do log do Git baixado no Workspace de forma segura
                     if (!commitMessage || commitMessage.trim() == "") {
                         commitMessage = powershell(script: "git log -1 --pretty=format:%B", returnStdout: true).trim()
                     }
-                    
                     return commitMessage.contains('[release]')
                 }
             }                
@@ -77,24 +73,40 @@ pipeline {
                 timeout(time: 1, unit: 'MINUTES')
             }
             steps {
-                echo '📦 Testes aprovados! Gerando pacote consolidado .xml para produção...'
+                echo '📦 Testes aprovados! Gerando script e pacote consolidado dinamicamente...'
                 
-                // O operador && garante que a variável de ambiente seja lida pelo terminal interativo do IRIS que abre na sequência
-                bat 'set JENKINS_WORKSPACE=%WORKSPACE% && "D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < D:\\IRIS_Server\\release.script || exit 0'
+                script {
+                    // 1. Cria a pasta build local no Workspace atual usando o Jenkins
+                    bat 'mkdir build 2>nul || exit 0'
+                    
+                    // 2. Normaliza as barras do caminho do Workspace para o padrão do IRIS (barras normais /)
+                    def irisWorkspacePath = "${WORKSPACE}".replace('\\', '/')
+                    
+                    // 3. Monta o script ObjectScript em uma única linha contínua perfeita
+                    def scriptConteudo = "zn \"USER\" " +
+                                         "set arquivoRelease=\"${irisWorkspacePath}/build/release.xml\",classesParaExportar=\"util.*.cls\",sc=1 " +
+                                         "set sc=\$SYSTEM.OBJ.Export(classesParaExportar,arquivoRelease,\"-d\") " +
+                                         "if sc do \$zf(-1,\"exit 0\") " +
+                                         "halt\n"
+                    
+                    // 4. Grava o arquivo de script dinâmico direto na pasta do build atual
+                    writeFile file: 'build/gerar_release.script', text: scriptConteudo, encoding: 'UTF-8'
+                }
                 
-                // Agora o arquivo existirá e este comando funcionará perfeitamente:
+                // 5. O IRIS executa o script dinâmico gerado pelo Jenkins que já possui o caminho correto gravado textualmente
+                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < build\\gerar_release.script || exit 0'
+                
+                // 6. Renomeia o arquivo gerado de forma garantida
                 bat "ren build\\release.xml release_build_${env.BUILD_NUMBER}.xml"
                 
+                // 7. Arquiva o artefato final indexado
                 archiveArtifacts artifacts: "build/release_build_${env.BUILD_NUMBER}.xml", fingerprint: true
                 
-                // Arquiva o arquivo que agora está na pasta correta do build atual!
-                archiveArtifacts artifacts: "build/release_build_${env.BUILD_NUMBER}.xml", fingerprint: true
-                
-                // Notificação segura usando withCredentials para não expor segredos no processo do Windows
+                // 8. Notificação segura para o Discord
                 withCredentials([string(credentialsId: env.DISCORD_WEBHOOK_ID, variable: 'WEBHOOK_SECRET')]) {
                     script {
                         def releasePayload = """{
-                            "content": "📦 **NOVA RELEASE DISPONÍVEL!**\\n**Projeto:** ${env.JOB_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚀 *O artefato consolidado 'release_build_${env.BUILD_NUMBER}.xml' foi gerado com sucesso, livre de classes de teste! O pacote já está arquivado no painel do Jenkins e pronto para ser implantado em Produção.*"
+                            "content": "📦 **NOVA RELEASE DISPONÍVEL!**\\n**Projeto:** ${env.JOB_NAME}\\n**Branch:** ${env.BRANCH_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚀 *O artefato consolidado 'release_build_${env.BUILD_NUMBER}.xml' foi gerado com sucesso! O pacote já está arquivado no painel do Jenkins para download.*"
                         }"""
                         def jsonRelease = releasePayload.replaceAll('\n', '').replaceAll('\r', '')
                         powershell "Invoke-RestMethod -Uri \$env:WEBHOOK_SECRET -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${jsonRelease}')) -ContentType 'application/json; charset=utf-8'"
