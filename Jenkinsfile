@@ -60,22 +60,32 @@ pipeline {
             // O rollback agora reimporta o XML original salvo no Estágio 3
             bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < D:\\IRIS_Server\\rollback.script || exit 0'
 
-             // Formatado direto no Groovy com quebras de linha reais
-            def msgPayload = """{
-                "content": "❌ **Pipeline FALHOU!**\\n**Projeto:** ${env.JOB_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚨 *Os testes unitários falharam ou a esteira quebrou. O procedimento de Rollback automático foi executado e o servidor foi restaurado.*"
-            }"""
-            
-            // Injeta o JSON pronto direto no comando sem passar por conversões do PowerShell
-            powershell "Invoke-RestMethod -Uri '${env.DISCORD_WEBHOOK}' -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${msgPayload.replaceAll('\n', '').replaceAll('\r', '')}')) -ContentType 'application/json; charset=utf-8'"
+            // O bloco script permite criar variáveis Groovy locais sem quebrar o compilador do Jenkins
+            script {
+                // Formatado direto no Groovy com quebras de linha reais
+                def msgPayload = """{
+                    "content": "❌ **Pipeline FALHOU!**\\n**Projeto:** ${env.JOB_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚨 *Os testes unitários falharam ou a esteira quebrou. O procedimento de Rollback automático foi executado e o servidor foi restaurado.*"
+                }"""
+
+                // Remove quebras de linha da string do payload para enviar um JSON limpo em uma linha só para a API
+                def jsonPronto = msgPayload.replaceAll('\n', '').replaceAll('\r', '')
+                
+                // Injeta o JSON pronto direto no comando sem passar por conversões do PowerShell
+                powershell "Invoke-RestMethod -Uri '${env.DISCORD_WEBHOOK}' -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${msgPayload.replaceAll('\n', '').replaceAll('\r', '')}')) -ContentType 'application/json; charset=utf-8'"
+            }
        }
         success {
             echo '✅ Pipeline concluído com sucesso. Nenhuma falha detectada!'
 
-             def msgPayload = """{
-                "content": "✅ **Pipeline SUCESSO!**\\n**Projeto:** ${env.JOB_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚀 *Alterações publicadas com sucesso no InterSystems IRIS e pacote de release gerado com segurança!*"
-            }"""
-            
-            powershell "Invoke-RestMethod -Uri '${env.DISCORD_WEBHOOK}' -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${msgPayload.replaceAll('\n', '').replaceAll('\r', '')}')) -ContentType 'application/json; charset=utf-8'"
+            script {
+                def msgPayload = """{
+                    "content": "✅ **Pipeline SUCESSO!**\\n**Projeto:** ${env.JOB_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚀 *Alterações publicadas com sucesso no InterSystems IRIS e pacote de release gerado com segurança!*"
+                }"""
+                
+                def jsonPronto = msgPayload.replaceAll('\n', '').replaceAll('\r', '')
+                
+                powershell "Invoke-RestMethod -Uri '${env.DISCORD_WEBHOOK}' -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${msgPayload.replaceAll('\n', '').replaceAll('\r', '')}')) -ContentType 'application/json; charset=utf-8'"
+            }
         }
     }
 }
