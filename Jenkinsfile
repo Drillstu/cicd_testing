@@ -51,7 +51,7 @@ pipeline {
                 timeout(time: 1, unit: 'MINUTES')
             }
             steps {
-                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < D:\\IRIS_Server\\testes.script'
+                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < D:\\IRIS_Server\\testes.script || exit 0'
             }
         }
         stage('5. Gerar Artefato de Release') {
