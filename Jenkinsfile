@@ -102,7 +102,7 @@ pipeline {
                 def jsonPronto = msgPayload.replaceAll('\n', '').replaceAll('\r', '')
                 
                 // Injeta o JSON pronto direto no comando sem passar por conversões do PowerShell
-                powershell "Invoke-RestMethod -Uri '${env.DISCORD_WEBHOOK}' -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${jsonPronto)}')) -ContentType 'application/json; charset=utf-8'"
+                powershell "Invoke-RestMethod -Uri '${env.DISCORD_WEBHOOK}' -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${jsonPronto}')) -ContentType 'application/json; charset=utf-8'"
             }
        }
         success {
@@ -115,7 +115,7 @@ pipeline {
                 
                 def jsonPronto = msgPayload.replaceAll('\n', '').replaceAll('\r', '')
                 
-                powershell "Invoke-RestMethod -Uri '${env.DISCORD_WEBHOOK}' -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${jsonPronto)}')) -ContentType 'application/json; charset=utf-8'"
+                powershell "Invoke-RestMethod -Uri '${env.DISCORD_WEBHOOK}' -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${jsonPronto}')) -ContentType 'application/json; charset=utf-8'"
             }
         }
     }
