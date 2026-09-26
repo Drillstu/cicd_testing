@@ -8,6 +8,6 @@ ClassMethod ImprimeResultado() {
     Do ..Soma(4, 6)
 }
 ClassMethod Soma(pNumero1 As %Integer, pNumero2 As %Integer) As %Integer {
-    Return pNumero1 + pNumero2 - 15
+    Return pNumero1 + pNumero2 + 150
 }
 }
