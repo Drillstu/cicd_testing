@@ -40,15 +40,9 @@ pipeline {
                     // 3. A mensagem do commit NÃO pode conter o texto '[skip test]' ou '[skip ci]'
                     // Lógica simplificada: lê a mensagem uma única vez e valida os dois termos com OU (||)
                     expression { 
-                        // Lê as mensagens do commit de forma permitida pelo Sandbox
+                        // Forma segura e aceita pelo Sandbox para consolidar as mensagens do commit
                         def changeLogSets = currentBuild.changeSets
-                        def commitMessage = ""
-                        for (int i = 0; i < changeLogSets.size(); i++) {
-                            def entries = changeLogSets[i].items
-                            for (int j = 0; j < entries.length; j++) {
-                                commitMessage += entries[j].msg + " "
-                            }
-                        }
+                        def commitMessage = changeLogSets.collect { set -> set.items.collect { item -> item.msg }.join(' ') }.join(' ')
                         return !commitMessage.contains('[skip test]') && !commitMessage.contains('[skip ci]')
                     }
                 }
@@ -63,15 +57,9 @@ pipeline {
         stage('5. Gerar Artefato de Release') {
             when {
                 expression { 
-                    // Mesma lógica segura para o estágio de release
+                    // Mesma validação de string contínua sem quebrar o Sandbox
                     def changeLogSets = currentBuild.changeSets
-                    def commitMessage = ""
-                    for (int i = 0; i < changeLogSets.size(); i++) {
-                        def entries = changeLogSets[i].items
-                        for (int j = 0; j < entries.length; j++) {
-                            commitMessage += entries[j].msg + " "
-                        }
-                    }
+                    def commitMessage = changeLogSets.collect { set -> set.items.collect { item -> item.msg }.join(' ') }.join(' ')
                     return commitMessage.contains('[release]')
                 }
             }                
