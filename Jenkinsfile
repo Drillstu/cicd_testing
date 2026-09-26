@@ -1,6 +1,12 @@
 pipeline {
     agent any
 
+    options {
+        // ESTRATÉGIA DE LIMPEZA: Mantém no disco apenas os últimos 10 builds e deleta automaticamente os artefatos/XMLs mais velhos que isso!
+        buildDiscarder(logRotator(numToKeepStr: '10', artifactNumToKeepStr: '10'))
+        timeout(time: 1, unit: 'HOURS')
+    }
+
     environment {
         // Cole sua URL aqui dentro das aspas simples
         DISCORD_WEBHOOK = 'discord-webhook-url'
