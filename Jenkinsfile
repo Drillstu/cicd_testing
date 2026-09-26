@@ -77,7 +77,7 @@ pipeline {
                 bat "ren \"C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\CICD_Testing (IRIS)@2\\build\\release.xml\" \"release_build_${env.BUILD_NUMBER}.xml\""
                 
                 // 3. O Jenkins arquiva o novo arquivo dinâmico na interface web
-                archiveArtifacts artifacts: "build/release_build_\_${env.BUILD_NUMBER}.xml", fingerprint: true
+                archiveArtifacts artifacts: "build/release_build_${env.BUILD_NUMBER}.xml", fingerprint: true
                 
                 // Alerta dedicado de Liberação de Release para o time no Discord
                 script {
