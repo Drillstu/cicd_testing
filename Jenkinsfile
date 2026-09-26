@@ -40,7 +40,8 @@ pipeline {
                     // 3. A mensagem do commit NÃO pode conter o texto '[skip test]' ou '[skip ci]'
                     // Lógica simplificada: lê a mensagem uma única vez e valida os dois termos com OU (||)
                     expression { 
-                        def commitMessage = bat(script: 'git log -1 --pretty=format:%B', returnStdout: true).trim()
+                        // PADRÃO DE MERCADO: Pega a mensagem do commit direto da API do Jenkins, sem chamar o 'bat'
+                        def commitMessage = currentBuild.rawBuild.changeSets.collect { cs -> cs.logs.collect { log -> log.msg } }.flatten().join(' ')
                         return !commitMessage.contains('[skip test]') && !commitMessage.contains('[skip ci]')
                     }
                 }
@@ -55,7 +56,8 @@ pipeline {
         stage('5. Gerar Artefato de Release') {
             when {
                 expression { 
-                    def commitMessage = bat(script: 'git log -1 --pretty=format:%B', returnStdout: true).trim()
+                    // Pega a mensagem nativamente da API para validar a flag de liberação
+                    def commitMessage = currentBuild.rawBuild.changeSets.collect { cs -> cs.logs.collect { log -> log.msg } }.flatten().join(' ')
                     return commitMessage.contains('[release]')
                 }
             }                
