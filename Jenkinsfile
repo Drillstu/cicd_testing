@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         // Cole sua URL aqui dentro das aspas simples
-        DISCORD_WEBHOOK = 'https://discord.com/api/webhooks/1553337580030918698/UKwS1xOcku3Us2HYxeO21r8VqxZ7K4o9yRXl80xyWAngAUnMYRrVP2LU72y4LOPTogyS'
+        DISCORD_WEBHOOK = credentials('discord-webhook-url')
     }
     
     stages {
@@ -70,13 +70,19 @@ pipeline {
                 echo '📦 Testes aprovados! Gerando pacote consolidado .xml para produção...'
                 bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < D:\\IRIS_Server\\release.script || exit 0'
                 
-                // Guarda o arquivo .xml gerado na interface web do próprio build do Jenkins
-                archiveArtifacts artifacts: 'build/*.xml', fingerprint: true
+                // 1. O IRIS gera o arquivo base 'release.xml'
+                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < D:\\IRIS_Server\\release.script || exit 0'
+                
+                // 2. O Windows renomeia o arquivo injetando de forma dinâmica o número do Build atual!
+                bat "ren \"C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\CICD_Testing (IRIS)@2\\build\\release.xml\" \"release_build_\_${env.BUILD_NUMBER}.xml\""
+                
+                // 3. O Jenkins arquiva o novo arquivo dinâmico na interface web
+                archiveArtifacts artifacts: "build/release_build_\_${env.BUILD_NUMBER}.xml", fingerprint: true
                 
                 // Alerta dedicado de Liberação de Release para o time no Discord
                 script {
                     def releasePayload = """{
-                        "content": "📦 **NOVA RELEASE DISPONÍVEL!**\\n**Projeto:** ${env.JOB_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚀 *O artefato consolidado 'release.xml' foi gerado com sucesso, livre de classes de teste! O pacote já está arquivado no painel do Jenkins e pronto para ser implantado em Produção.*"
+                        "content": "📦 **NOVA RELEASE DISPONÍVEL!**\\n**Projeto:** ${env.JOB_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚀 *O artefato consolidado 'release_build_${env.BUILD_NUMBER}.xml' foi gerado com sucesso, livre de classes de teste! O pacote já está arquivado no painel do Jenkins e pronto para ser implantado em Produção.*"
                     }"""
                     def jsonRelease = releasePayload.replaceAll('\n', '').replaceAll('\r', '')
                     powershell "Invoke-RestMethod -Uri '${env.DISCORD_WEBHOOK}' -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${jsonRelease}')) -ContentType 'application/json; charset=utf-8'"
