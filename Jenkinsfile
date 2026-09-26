@@ -79,14 +79,13 @@ pipeline {
             steps {
                 echo '📦 Testes aprovados! Gerando pacote consolidado .xml para produção...'
                 
-                // CORREÇÃO DEFINITIVA: Cria a variável no Windows e chama o IRIS sem parâmetros inválidos
-                bat '''
-                    set JENKINS_WORKSPACE=%WORKSPACE%
-                    "D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < D:\\IRIS_Server\\release.script || exit 0
-                '''
+                // O operador && garante que a variável de ambiente seja lida pelo terminal interativo do IRIS que abre na sequência
+                bat 'set JENKINS_WORKSPACE=%WORKSPACE% && "D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < D:\\IRIS_Server\\release.script || exit 0'
                 
-                // Renomeia o arquivo gerado
+                // Agora o arquivo existirá e este comando funcionará perfeitamente:
                 bat "ren build\\release.xml release_build_${env.BUILD_NUMBER}.xml"
+                
+                archiveArtifacts artifacts: "build/release_build_${env.BUILD_NUMBER}.xml", fingerprint: true
                 
                 // Arquiva o arquivo que agora está na pasta correta do build atual!
                 archiveArtifacts artifacts: "build/release_build_${env.BUILD_NUMBER}.xml", fingerprint: true
