@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         // Cole sua URL aqui dentro das aspas simples
-        DISCORD_WEBHOOK = 'https://discord.com/api/webhooks/1553329772543610890/pMp6AamcySFXHb_yGygY5psvOaOMNJkr4ENyd9i23OZ7pGfep7jQ00LgtSw0U9pl24d0'
+        DISCORD_WEBHOOK = 'https://discord.com/api/webhooks/1553337580030918698/UKwS1xOcku3Us2HYxeO21r8VqxZ7K4o9yRXl80xyWAngAUnMYRrVP2LU72y4LOPTogyS'
     }
     
     stages {
@@ -50,6 +50,24 @@ pipeline {
             }
             steps {
                 bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < D:\\IRIS_Server\\testes.script'
+            }
+        }
+        stage('5. Gerar Artefato de Release') {
+            when {
+                expression { 
+                    def commitMessage = bat(script: 'git log -1 --pretty=%B', returnStdout: true).trim()
+                    return commitMessage.contains('[release]')
+                }
+            }                
+            options {
+                timeout(time: 1, unit: 'MINUTES')
+            }
+            steps {
+                echo '📦 Testes aprovados! Gerando pacote consolidado .xml para produção...'
+                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < D:\\IRIS_Server\\release.script || exit 0'
+                
+                // Opcional do Jenkins: Guarda o arquivo .xml gerado na interface web do próprio build
+                archiveArtifacts artifacts: 'build/*.xml', fingerprint: true
             }
         }
     }
