@@ -60,24 +60,22 @@ pipeline {
             // O rollback agora reimporta o XML original salvo no Estágio 3
             bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < D:\\IRIS_Server\\rollback.script || exit 0'
 
-            // Envia um alerta de falha estruturado para o canal do Discord
-            powershell """
-                \$body = @{
-                    content = "❌ **Pipeline FALHOU!**\\n**Projeto:** ${env.JOB_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚨 *Os testes unitários falharam no IRIS. O procedimento de Rollback automático foi executado com sucesso e o servidor foi restaurado para o backup anterior.*"
-                    } | ConvertTo-Json
-                Invoke-RestMethod -Uri '${env.DISCORD_WEBHOOK}' -Method Post -Body \$body -ContentType 'application/json; charset=utf-8'
-            """                
-        }
+             // Formatado direto no Groovy com quebras de linha reais
+            def msgPayload = """{
+                "content": "❌ **Pipeline FALHOU!**\\n**Projeto:** ${env.JOB_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚨 *Os testes unitários falharam ou a esteira quebrou. O procedimento de Rollback automático foi executado e o servidor foi restaurado.*"
+            }"""
+            
+            // Injeta o JSON pronto direto no comando sem passar por conversões do PowerShell
+            powershell "Invoke-RestMethod -Uri '${env.DISCORD_WEBHOOK}' -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${msgPayload.replaceAll('\n', '').replaceAll('\r', '')}')) -ContentType 'application/json; charset=utf-8'"
+       }
         success {
             echo '✅ Pipeline concluído com sucesso. Nenhuma falha detectada!'
 
-            // Envia um alerta de sucesso estruturado para o canal do Discord
-            powershell """
-                \$body = @{
-                    content = "✅ **Pipeline SUCESSO!**\\n**Projeto:** ${env.JOB_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚀 *Todos os testes unitários passaram perfeitamente no InterSystems IRIS e as alterações estão publicadas com segurança!*"
-                } | ConvertTo-Json
-                Invoke-RestMethod -Uri '${env.DISCORD_WEBHOOK}' -Method Post -Body \$body -ContentType 'application/json; charset=utf-8'
-            """
+             def msgPayload = """{
+                "content": "✅ **Pipeline SUCESSO!**\\n**Projeto:** ${env.JOB_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚀 *Alterações publicadas com sucesso no InterSystems IRIS e pacote de release gerado com segurança!*"
+            }"""
+            
+            powershell "Invoke-RestMethod -Uri '${env.DISCORD_WEBHOOK}' -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${msgPayload.replaceAll('\n', '').replaceAll('\r', '')}')) -ContentType 'application/json; charset=utf-8'"
         }
     }
 }
