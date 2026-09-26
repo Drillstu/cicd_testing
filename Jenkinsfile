@@ -64,7 +64,7 @@ pipeline {
             powershell """
                 \$body = @{
                     content = "❌ **Pipeline FALHOU!**\\n**Projeto:** ${env.JOB_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚨 *Os testes unitários falharam no IRIS. O procedimento de Rollback automático foi executado com sucesso e o servidor foi restaurado para o backup anterior.*"
-                    } | ConvertTo-Json -EnumsAsStrings
+                    } | ConvertTo-Json
                 Invoke-RestMethod -Uri '${env.DISCORD_WEBHOOK}' -Method Post -Body \$body -ContentType 'application/json; charset=utf-8'
             """                
         }
@@ -75,7 +75,7 @@ pipeline {
             powershell """
                 \$body = @{
                     content = "✅ **Pipeline SUCESSO!**\\n**Projeto:** ${env.JOB_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚀 *Todos os testes unitários passaram perfeitamente no InterSystems IRIS e as alterações estão publicadas com segurança!*"
-                } | ConvertTo-Json -EnumsAsStrings
+                } | ConvertTo-Json
                 Invoke-RestMethod -Uri '${env.DISCORD_WEBHOOK}' -Method Post -Body \$body -ContentType 'application/json; charset=utf-8'
             """
         }
