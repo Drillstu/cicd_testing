@@ -70,8 +70,17 @@ pipeline {
                 echo '📦 Testes aprovados! Gerando pacote consolidado .xml para produção...'
                 bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < D:\\IRIS_Server\\release.script || exit 0'
                 
-                // Opcional do Jenkins: Guarda o arquivo .xml gerado na interface web do próprio build
+                // Guarda o arquivo .xml gerado na interface web do próprio build do Jenkins
                 archiveArtifacts artifacts: 'build/*.xml', fingerprint: true
+                
+                // Alerta dedicado de Liberação de Release para o time no Discord
+                script {
+                    def releasePayload = """{
+                        "content": "📦 **NOVA RELEASE DISPONÍVEL!**\\n**Projeto:** \({env.JOB_NAME}\\n**Build:** #\){env.BUILD_NUMBER}\\n🚀 *O artefato consolidado \`release.xml\` foi gerado com sucesso, livre de classes de teste! O pacote já está arquivado no painel do Jenkins e pronto para ser implantado em Produção.*"
+                    }"""
+                    def jsonRelease = releasePayload.replaceAll('\n', '').replaceAll('\r', '')
+                    powershell "Invoke-RestMethod -Uri '\({env.DISCORD_WEBHOOK}' -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('\){jsonRelease}')) -ContentType 'application/json; charset=utf-8'"
+                }
             }
         }
     }
