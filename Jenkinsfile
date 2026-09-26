@@ -111,10 +111,9 @@ pipeline {
                         def jsonRelease = releasePayload.replaceAll('\n', '').replaceAll('\r', '')
                         
                         // FIX: Alterado de aspas simples para aspas duplas escapadas (\") no argumento do GetBytes para blindar o PowerShell
-                        powershell "Invoke-RestMethod -Uri \$env:WEBHOOK_SECRET -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes(\"${jsonRelease}\")) -ContentType 'application/json; charset=utf-8'"
+                        powershell "Invoke-RestMethod -Uri \$env:WEBHOOK_SECRET -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${jsonRelease}')) -ContentType 'application/json; charset=utf-8'"
                     }
                 }
-
             }
         }
     }
