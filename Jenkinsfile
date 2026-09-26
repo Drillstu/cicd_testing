@@ -40,7 +40,7 @@ pipeline {
                     // 3. A mensagem do commit NÃO pode conter o texto '[skip test]' ou '[skip ci]'
                     // Lógica simplificada: lê a mensagem uma única vez e valida os dois termos com OU (||)
                     expression { 
-                        def commitMessage = bat(script: 'git log -1 --pretty:%B', returnStdout: true).trim()
+                        def commitMessage = bat(script: 'git log -1 --pretty=format:%B', returnStdout: true).trim()
                         return !commitMessage.contains('[skip test]') && !commitMessage.contains('[skip ci]')
                     }
                 }
@@ -55,7 +55,7 @@ pipeline {
         stage('5. Gerar Artefato de Release') {
             when {
                 expression { 
-                    def commitMessage = bat(script: 'git log -1 --pretty:%B', returnStdout: true).trim()
+                    def commitMessage = bat(script: 'git log -1 --pretty=format:%B', returnStdout: true).trim()
                     return commitMessage.contains('[release]')
                 }
             }                
