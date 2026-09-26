@@ -55,7 +55,11 @@ pipeline {
                 timeout(time: 1, unit: 'MINUTES')
             }
             steps {
-                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < D:\\IRIS_Server\\testes.script || exit 0'
+                echo '🧪 Executando bateria de testes unitários de forma dinâmica...'
+                
+                // O argumento "${WORKSPACE}" entra antes do injetor de script (<) eliminando caminhos estáticos!
+                def irisWorkspacePath = "${WORKSPACE}".replace('\\', '/')
+                bat "\"D:\\InterSystems\\IRIS\\bin\\irissession\" IRIS \"${irisWorkspacePath} < D:\\IRIS_Server\\testes.script || exit 0"
             }
         }
         stage('5. Gerar Artefato de Release') {

@@ -1,4 +1,4 @@
-Class util.Teste Extends %RegisteredObject
+Class src.util.Teste Extends %RegisteredObject
 {
 Property A As %Integer [ InitialExpression = 0 ];
 
