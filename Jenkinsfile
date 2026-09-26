@@ -76,7 +76,7 @@ pipeline {
                 // Alerta dedicado de Liberação de Release para o time no Discord
                 script {
                     def releasePayload = """{
-                        "content": "📦 **NOVA RELEASE DISPONÍVEL!**\\n**Projeto:** \({env.JOB_NAME}\\n**Build:** #\){env.BUILD_NUMBER}\\n🚀 *O artefato consolidado \`release.xml\` foi gerado com sucesso, livre de classes de teste! O pacote já está arquivado no painel do Jenkins e pronto para ser implantado em Produção.*"
+                        "content": "📦 **NOVA RELEASE DISPONÍVEL!**\\n**Projeto:** ${env.JOB_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚀 *O artefato consolidado \`release.xml\` foi gerado com sucesso, livre de classes de teste! O pacote já está arquivado no painel do Jenkins e pronto para ser implantado em Produção.*"
                     }"""
                     def jsonRelease = releasePayload.replaceAll('\n', '').replaceAll('\r', '')
                     powershell "Invoke-RestMethod -Uri '\({env.DISCORD_WEBHOOK}' -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('\){jsonRelease}')) -ContentType 'application/json; charset=utf-8'"
