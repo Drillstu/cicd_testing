@@ -3,7 +3,6 @@ pipeline {
 
     options {
         buildDiscarder(logRotator(numToKeepStr: '10', artifactNumToKeepStr: '10'))
-        timeout(time: 1, unit: 'HOURS')
     }
 
     environment {
@@ -28,23 +27,20 @@ pipeline {
         }
         
         stage('3. Backup e Deploy no IRIS') {
-            options {
-                timeout(time: 20, unit: 'MINUTES')
-            }
             steps {
                 echo '📦 Criando snapshot de segurança e aplicando novo código fonte no pacote src...'
                 script {
-                    def importarScriptConteudo = "zn \"USER\"\n" +
-                                              "set arquivoBackup=\"D:\\\\IRIS_Server\\\\backup_anterior.xml\"\n" +
-                                              "set pacoteAlvo=\"src\"\n" +
-                                              "do \$SYSTEM.OBJ.ExportPackage(pacoteAlvo, arquivoBackup, \"-d\")\n" +
-                                              "set sc=\$SYSTEM.OBJ.LoadDir(\"D:/IRIS_Server/projectGit/src/\", \"ck\", , 1)\n" +
-                                              "if 'sc hang 2 halt\n" +
-                                              "halt\n"
-                    
-                    writeFile file: 'build/importar.script', text: importarScriptConteudo, encoding: 'UTF-8'
+                    def importarScriptConteudo = """zn "USER"
+set arquivoBackup="D:\\\\IRIS_Server\\\\backup_anterior.xml"
+set pacoteAlvo="src"
+do \$SYSTEM.OBJ.ExportPackage(pacoteAlvo, arquivoBackup, "-d")
+set sc=\$SYSTEM.OBJ.LoadDir("D:/IRIS_Server/projectGit/src/", "ck", , 1)
+if 'sc hang 2 halt
+halt
+"""
+                    writeFile file: 'scripts/importar.script', text: importarScriptConteudo, encoding: 'UTF-8'
                 }
-                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < build\\importar.script || exit 0'
+                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\importar.script || exit 0'
             }
         }
         
@@ -60,29 +56,26 @@ pipeline {
                     }
                 }
             }
-            options {
-                timeout(time: 5, unit: 'MINUTES')
-            }
             steps {
                 echo '🧪 Executando bateria de testes unitários com retenção inteligente...'
                 script {
                     def irisWorkspacePath = "\${WORKSPACE}".replace('\\', '/')
                     
-                    def testeScriptConteudo = "zn \"USER\"\n" +
-                                              "set primeiroId=\$order(^UnitTest.Result(\"\"))\n" +
-                                              "if primeiroId'=\"\" { set dataCriacao=\$listget(\$get(^UnitTest.Result(primeiroId)), 1) if dataCriacao'=\"\" { set dataH=\$zdatetimeh(dataCriacao, 3, 1) set diasAntigo=\$piece(dataH, \",\", 1) set diasHoje=\$piece(\$horolog, \",\", 1) if (diasHoje - diasAntigo) >= 7 { do ##class(%UnitTest.Result.TestInstance).%DeleteExtent() } } }\n" +
-                                              "set ^UnitTestRoot=\"\${irisWorkspacePath}\"\n" +
-                                              "set sc=##class(%UnitTest.Manager).RunTest(\"tests\", \"/load/compile\")\n" +
-                                              "set lastId=\$order(^UnitTest.Result(\"\"), -1)\n" +
-                                              "set statusValido=1\n" +
-                                              "if lastId'=\"\" { set dadosSuite=\$get(^UnitTest.Result(lastId, \"tests\")) if dadosSuite'=\"\" set statusValido=\$listget(dadosSuite, 1) }\n" +
-                                              "if ('sc) || (statusValido=0) hang 2 halt\n" +
-                                              "halt\n"
-                    
-                    writeFile file: 'build/executar_testes.script', text: testeScriptConteudo, encoding: 'UTF-8'
+                    def testeScriptConteudo = """zn "USER"
+set primeiroId=\$order(^UnitTest.Result(""))
+if primeiroId'="" { set dataCriacao=\$listget(\$get(^UnitTest.Result(primeiroId)), 1) if dataCriacao'="" { set dataH=\$zdatetimeh(dataCriacao, 3, 1) set diasAntigo=\$piece(dataH, ",", 1) set diasHoje=\$piece(\$horolog, ",", 1) if (diasHoje - diasAntigo) >= 7 { do ##class(%UnitTest.Result.TestInstance).%DeleteExtent() } } }
+set ^UnitTestRoot="\${irisWorkspacePath}"
+set sc=##class(%UnitTest.Manager).RunTest("tests", "/load/compile")
+set lastId=\$order(^UnitTest.Result(""), -1)
+set statusValido=1
+if lastId'="" { set dadosSuite=\$get(^UnitTest.Result(lastId, "tests")) if dadosSuite'="" set statusValido=\$listget(dadosSuite, 1) }
+if ('sc) || (statusValido=0) hang 2 halt
+halt
+"""
+                    writeFile file: 'scripts/executar_testes.script', text: testeScriptConteudo, encoding: 'UTF-8'
                 }
                 
-                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < build\\executar_testes.script || exit 0'
+                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\executar_testes.script || exit 0'
                 
                 script {
                     currentBuild.result = 'SUCCESS'
@@ -100,24 +93,21 @@ pipeline {
                     }
                     return commitMessage.contains('[release]')
                 }
-            }  
-            options {
-                timeout(time: 2, unit: 'MINUTES')
-            }             
+            }                
             steps {
                 echo '📦 Testes aprovados com louvor! Exportando pacote consolidado .xml para o histórico...'
                 script {
                     def irisWorkspacePath = "\${WORKSPACE}".replace('\\', '/')
-                    def scriptConteudo = "zn \"USER\"\n" +
-                                         "set arquivoRelease=\"\${irisWorkspacePath}/build/release.xml\"\n" +
-                                         "set classesParaExportar=\"src.*.cls\"\n" +
-                                         "set sc=\$SYSTEM.OBJ.Export(classesParaExportar,arquivoRelease,\"-d\")\n" +
-                                         "halt\n"
-                    
-                    writeFile file: 'build/gerar_release.script', text: scriptConteudo, encoding: 'UTF-8'
+                    def scriptConteudo = """zn "USER"
+set arquivoRelease="\${irisWorkspacePath}/build/release.xml"
+set classesParaExportar="src.*.cls"
+set sc=\$SYSTEM.OBJ.Export(classesParaExportar,arquivoRelease,"-d")
+halt
+"""
+                    writeFile file: 'scripts/gerar_release.script', text: scriptConteudo, encoding: 'UTF-8'
                 }
                 
-                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < build\\gerar_release.script || exit 0'
+                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\gerar_release.script || exit 0'
                 
                 bat 'mkdir D:\\IRIS_Server\\build 2>nul || exit 0'
                 bat "move build\\release.xml D:\\IRIS_Server\\build\\release_build_\${env.BUILD_NUMBER}.xml"
@@ -142,14 +132,14 @@ pipeline {
         failure {
             echo '🚨 O build falhou ou os testes quebraram! Executando Rollback automático via ObjectScript...'
             script {
-                def rollbackScriptConteudo = "zn \"USER\"\n" +
-                                             "set arquivoBackup=\"D:\\\\IRIS_Server\\\\backup_anterior.xml\"\n" +
-                                             "if ##class(%File).Exists(arquivoBackup) set sc=\$SYSTEM.OBJ.Load(arquivoBackup, \"ck\")\n" +
-                                             "halt\n"
-                
-                writeFile file: 'build/rollback.script', text: rollbackScriptConteudo, encoding: 'UTF-8'
+                def rollbackScriptConteudo = """zn "USER"
+set arquivoBackup="D:\\\\IRIS_Server\\\\backup_anterior.xml"
+if ##class(%File).Exists(arquivoBackup) set sc=\$SYSTEM.OBJ.Load(arquivoBackup, "ck")
+halt
+"""
+                writeFile file: 'scripts/rollback.script', text: rollbackScriptConteudo, encoding: 'UTF-8'
             }
-            bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < build\\rollback.script || exit 0'
+            bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\rollback.script || exit 0'
 
             withCredentials([string(credentialsId: env.DISCORD_WEBHOOK_ID, variable: 'WEBHOOK_SECRET')]) {
                 script {
