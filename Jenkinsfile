@@ -1,8 +1,10 @@
+```groovy
 pipeline {
     agent any
 
     options {
         buildDiscarder(logRotator(numToKeepStr: '10', artifactNumToKeepStr: '10'))
+        timeout(time: 1, unit: 'HOURS')
     }
 
     environment {
@@ -27,8 +29,13 @@ pipeline {
         }
         
         stage('3. Backup e Deploy no IRIS') {
+            options {
+                timeout(time: 30, unit: 'MINUTES') 
+            }
+            
             steps {
                 echo '📦 Criando snapshot de segurança e aplicando novo código fonte no pacote src...'
+                
                 script {
                     def importarScriptConteudo = "zn \"USER\"\n" +
                                               "set arquivoBackup=\"D:\\\\IRIS_Server\\\\backup_anterior.xml\"\n" +
@@ -38,10 +45,37 @@ pipeline {
                                               "if 'sc hang 2 halt\n" +
                                               "halt\n"
 
-                    writeFile file: 'scripts/importar.script', text: importarScriptConteudo, encoding: 'UTF-8'
+                    writeFile file: 'scripts/importar.script',
+                              text: importarScriptConteudo,
+                              encoding: 'UTF-8'
                 }
                 
-                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\importar.script || exit 0'
+                script {
+                    try {
+                        def exitCode = bat(
+                            returnStatus: true,
+                            script: '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\importar.script'
+                        )
+
+                        echo "========================================"
+                        echo "IRIS DEPLOY - EXIT CODE: ${exitCode}"
+                        echo "========================================"
+
+                        if (exitCode != 0) {
+                            error "O irissession retornou código de saída ${exitCode} durante o deploy."
+                        }
+
+                    } catch (Exception e) {
+                        echo "========================================"
+                        echo "ERRO DURANTE O DEPLOY"
+                        echo "========================================"
+                        echo "Tipo: ${e.getClass().getName()}"
+                        echo "Mensagem: ${e.getMessage()}"
+                        echo "========================================"
+
+                        throw e
+                    }
+                }
             }
         }
         
@@ -52,13 +86,23 @@ pipeline {
                     not { branch 'production' }
                     expression { 
                         def changeLogSets = currentBuild.changeSets
-                        def commitMessage = changeLogSets.collect { set -> set.items.collect { item -> item.msg }.join(' ') }.join(' ')
-                        return !commitMessage.contains('[skip test]') && !commitMessage.contains('[skip ci]')
+                        def commitMessage = changeLogSets.collect { set -> 
+                            set.items.collect { item -> item.msg }.join(' ') 
+                        }.join(' ')
+
+                        return !commitMessage.contains('[skip test]') &&
+                               !commitMessage.contains('[skip ci]')
                     }
                 }
             }
+
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
+
             steps {
                 echo '🧪 Executando bateria de testes unitários com retenção inteligente...'
+                
                 script {
                     def irisWorkspacePath = "${WORKSPACE}".replace('\\', '/')
                     
@@ -73,13 +117,50 @@ pipeline {
                                               "if ('sc) || (statusValido=0) hang 2 halt\n" +
                                               "halt\n"
 
-                    writeFile file: 'scripts/executar_testes.script', text: testeScriptConteudo, encoding: 'UTF-8'
+                    writeFile file: 'scripts/executar_testes.script',
+                              text: testeScriptConteudo,
+                              encoding: 'UTF-8'
                 }
-                
-                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\executar_testes.script'
-                
+
                 script {
-                    currentBuild.result = 'SUCCESS'
+                    try {
+                        echo '▶️ Iniciando irissession para execução dos testes...'
+
+                        def exitCode = bat(
+                            returnStatus: true,
+                            script: '''
+                                "D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\executar_testes.script
+
+                                echo.
+                                echo ========================================
+                                echo ERRORLEVEL DO IRISSESSION: %ERRORLEVEL%
+                                echo ========================================
+
+                                exit /b %ERRORLEVEL%
+                            '''
+                        )
+
+                        echo "========================================"
+                        echo "IRIS TESTES - EXIT CODE: ${exitCode}"
+                        echo "========================================"
+
+                        if (exitCode != 0) {
+                            error "O irissession retornou código de saída ${exitCode} após a execução dos testes."
+                        }
+
+                        echo '✅ irissession retornou código 0. Testes concluídos sem erro de processo.'
+
+                    } catch (Exception e) {
+                        echo "========================================"
+                        echo "ERRO NO ESTÁGIO DE TESTES"
+                        echo "========================================"
+                        echo "Tipo da exceção: ${e.getClass().getName()}"
+                        echo "Mensagem: ${e.getMessage()}"
+                        echo "Resultado atual do build: ${currentBuild.result}"
+                        echo "========================================"
+
+                        throw e
+                    }
                 }
             }
         }
@@ -88,39 +169,68 @@ pipeline {
             when {
                 expression { 
                     def changeLogSets = currentBuild.changeSets
-                    def commitMessage = changeLogSets.collect { set -> set.items.collect { item -> item.msg }.join(' ') }.join(' ')
+                    def commitMessage = changeLogSets.collect { set -> 
+                        set.items.collect { item -> item.msg }.join(' ') 
+                    }.join(' ')
+
                     if (!commitMessage || commitMessage.trim() == "") {
-                        commitMessage = powershell(script: "git log -1 --pretty=format:%B", returnStdout: true).trim()
+                        commitMessage = powershell(
+                            script: "git log -1 --pretty=format:%B",
+                            returnStdout: true
+                        ).trim()
                     }
+
                     return commitMessage.contains('[release]')
                 }
             }
+            
+            options {
+                timeout(time: 1, unit: 'MINUTES')
+            }
+
             steps {
                 echo '📦 Testes aprovados com louvor! Exportando pacote consolidado .xml para implantação...'
+                
                 script {
                     def irisWorkspacePath = "${WORKSPACE}".replace('\\', '/')
+                    
                     def scriptConteudo = "zn \"USER\"\n" +
                                          "set arquivoRelease=\"${irisWorkspacePath}/build/release.xml\"\n" +
                                          "set classesParaExportar=\"src.*.cls\"\n" +
                                          "set sc=\$SYSTEM.OBJ.Export(classesParaExportar,arquivoRelease,\"-d\")\n" +
                                          "halt\n"
-                    writeFile file: 'scripts/gerar_release.script', text: scriptConteudo, encoding: 'UTF-8'
+
+                    writeFile file: 'scripts/gerar_release.script',
+                              text: scriptConteudo,
+                              encoding: 'UTF-8'
                 }
                 
                 bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\gerar_release.script || exit 0'
-                
+
                 bat 'mkdir D:\\IRIS_Server\\build 2>nul || exit 0'
+
                 bat "move build\\release.xml D:\\IRIS_Server\\build\\release_build_${env.BUILD_NUMBER}.xml"
+
+                archiveArtifacts artifacts: "build/release_build_${env.BUILD_NUMBER}.xml",
+                                 fingerprint: true
                 
-                archiveArtifacts artifacts: "build/release_build_${env.BUILD_NUMBER}.xml", fingerprint: true
-                
-                withCredentials([string(credentialsId: env.DISCORD_WEBHOOK_ID, variable: 'WEBHOOK_SECRET')]) {
+                withCredentials([
+                    string(
+                        credentialsId: env.DISCORD_WEBHOOK_ID,
+                        variable: 'WEBHOOK_SECRET'
+                    )
+                ]) {
                     script {
                         powershell """
                             \$corpo = @{
-                                content = "📦 **NOVA RELEASE DISPONÍVEL!**`n**Projeto:** ${env.JOB_NAME}`n**Branch:** ${env.BRANCH_NAME}`n**Build:** #${env.BUILD_NUMBER}`n🚀 *O artefato consolidado release_build_\${env.BUILD_NUMBER}.xml foi gerado com sucesso! O pacote está seguro na pasta externa D:\\\\IRIS_Server\\\\build e arquivado no Jenkins.*"
+                                content = "📦 **NOVA RELEASE DISPONÍVEL!**`n**Projeto:** ${env.JOB_NAME}`n**Branch:** ${env.BRANCH_NAME}`n**Build:** #${env.BUILD_NUMBER}`n🚀 *O artefato consolidado release_build_${env.BUILD_NUMBER}.xml foi gerado com sucesso! O pacote está seguro na pasta externa D:\\\\IRIS_Server\\\\build e arquivado no Jenkins.*"
                             } | ConvertTo-Json -Compress
-                            Invoke-RestMethod -Uri \$env:WEBHOOK_SECRET -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes(\$corpo)) -ContentType 'application/json; charset=utf-8'
+
+                            Invoke-RestMethod `
+                                -Uri \$env:WEBHOOK_SECRET `
+                                -Method Post `
+                                -Body ([System.Text.Encoding]::UTF8.GetBytes(\$corpo)) `
+                                -ContentType 'application/json; charset=utf-8'
                         """
                     }
                 }
@@ -131,39 +241,66 @@ pipeline {
     post {
         failure {
             echo '🚨 O build falhou ou os testes quebraram! Executando Rollback automático via ObjectScript...'
+
             script {
                 def rollbackScriptConteudo = "zn \"USER\"\n" +
                                              "set arquivoBackup=\"D:\\\\IRIS_Server\\\\backup_anterior.xml\"\n" +
                                              "if ##class(%File).Exists(arquivoBackup) set sc=\$SYSTEM.OBJ.Load(arquivoBackup, \"ck\")\n" +
                                              "halt\n"
-                                             
-                writeFile file: 'scripts/rollback.script', text: rollbackScriptConteudo, encoding: 'UTF-8'
+
+                writeFile file: 'scripts/rollback.script',
+                          text: rollbackScriptConteudo,
+                          encoding: 'UTF-8'
             }
+
             bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\rollback.script || exit 0'
 
-            withCredentials([string(credentialsId: env.DISCORD_WEBHOOK_ID, variable: 'WEBHOOK_SECRET')]) {
+            withCredentials([
+                string(
+                    credentialsId: env.DISCORD_WEBHOOK_ID,
+                    variable: 'WEBHOOK_SECRET'
+                )
+            ]) {
                 script {
                     powershell """
                         \$corpo = @{
                             content = "❌ **Pipeline FALHOU!**`n**Projeto:** ${env.JOB_NAME}`n**Branch:** ${env.BRANCH_NAME}`n**Build:** #${env.BUILD_NUMBER}`n🚨 *Os testes unitários falharam ou a esteira quebrou. O procedimento de Rollback automático foi executado e o ambiente local foi restaurado.*"
                         } | ConvertTo-Json -Compress
-                        Invoke-RestMethod -Uri \$env:WEBHOOK_SECRET -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes(\$corpo)) -ContentType 'application/json; charset=utf-8'
+
+                        Invoke-RestMethod `
+                            -Uri \$env:WEBHOOK_SECRET `
+                            -Method Post `
+                            -Body ([System.Text.Encoding]::UTF8.GetBytes(\$corpo)) `
+                            -ContentType 'application/json; charset=utf-8'
                     """
                 }
             }
-       }
+        }
+
         success {
             echo '✅ Pipeline concluído com sucesso total. Nenhuma inconsistência detectada!'
-            withCredentials([string(credentialsId: env.DISCORD_WEBHOOK_ID, variable: 'WEBHOOK_SECRET')]) {
+
+            withCredentials([
+                string(
+                    credentialsId: env.DISCORD_WEBHOOK_ID,
+                    variable: 'WEBHOOK_SECRET'
+                )
+            ]) {
                 script {
                     powershell """
                         \$corpo = @{
                             content = "✅ **Pipeline SUCESSO!**`n**Projeto:** ${env.JOB_NAME}`n**Branch:** ${env.BRANCH_NAME}`n**Build:** #${env.BUILD_NUMBER}`n🚀 *Alterações publicadas com sucesso no InterSystems IRIS e pacote de release gerado com segurança!*"
                         } | ConvertTo-Json -Compress
-                        Invoke-RestMethod -Uri \$env:WEBHOOK_SECRET -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes(\$corpo)) -ContentType 'application/json; charset=utf-8'
+
+                        Invoke-RestMethod `
+                            -Uri \$env:WEBHOOK_SECRET `
+                            -Method Post `
+                            -Body ([System.Text.Encoding]::UTF8.GetBytes(\$corpo)) `
+                            -ContentType 'application/json; charset=utf-8'
                     """
                 }
             }
         }
     }
 }
+```
