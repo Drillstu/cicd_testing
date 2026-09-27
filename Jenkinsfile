@@ -41,7 +41,7 @@ pipeline {
                                               "set pacoteAlvo=\"src\"\n" +
                                               "do \$SYSTEM.OBJ.ExportPackage(pacoteAlvo, arquivoBackup, \"-d\")\n" +
                                               "set sc=\$SYSTEM.OBJ.LoadDir(\"D:/IRIS_Server/projectGit/src/\", \"ck\", , 1)\n" +
-                                              "if 'sc hang 2 halt\n" +
+                                              "if 'sc hang 2 halt\n\n" +
                                               "halt\n"
 
                     writeFile file: 'scripts/importar.script',
