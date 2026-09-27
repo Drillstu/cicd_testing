@@ -2,54 +2,59 @@ pipeline {
     agent any
 
     options {
-        // ESTRATÉGIA DE LIMPEZA: Mantém no disco apenas os últimos 10 builds e deleta automaticamente os artefatos/XMLs mais velhos que isso!
         buildDiscarder(logRotator(numToKeepStr: '10', artifactNumToKeepStr: '10'))
         timeout(time: 1, unit: 'HOURS')
     }
 
     environment {
-        // FIX: Nome padronizado para bater com as chamadas de credenciais abaixo
         DISCORD_WEBHOOK_ID = 'discord-webhook-url'
     }
     
     stages {
         stage('1. Baixar do GitHub') {
             steps {
-                // PADRÃO DE PRODUÇÃO: Pega a URL e a Branch dinamicamente de onde o script foi baixado
+                echo '📥 Baixando a última versão do código fonte via Git...'
                 checkout scm
             }
         }
+        
         stage('2. Copiar para o Servidor') {
             steps {
-                echo '🧹 Limpando resíduos antigos e espelhando repositório no servidor...'
-                
-                // Correção definitiva de pastas: rmdir apaga a pasta inteira e os subdiretórios antigos vazios
+                echo '🧹 Limpando resíduos de builds antigos e espelhando repositório no servidor local...'
                 bat 'rmdir /q /s D:\\IRIS_Server\\projectGit 2>nul || exit 0'
                 bat 'mkdir D:\\IRIS_Server\\projectGit'
-                
-                // Copia a estrutura nova perfeitamente limpa
                 bat 'xcopy /E /Y . D:\\IRIS_Server\\projectGit\\'
             }
         }
+        
         stage('3. Backup e Deploy no IRIS') {
             options {
                 timeout(time: 1, unit: 'MINUTES') 
             }
             steps {
-                // Esse script agora cria o backup_anterior.xml ANTES de aplicar o código novo
-                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < D:\\IRIS_Server\\importar.script || exit 0'
+                echo '📦 Criando snapshot de segurança e aplicando novo código fonte no pacote src...'
+                script {
+                    def importarScriptConteudo = """zn "USER"
+set arquivoBackup="D:\\IRIS_Server\\backup_anterior.xml"
+set pacoteAlvo="src"
+do \$SYSTEM.OBJ.ExportPackage(pacoteAlvo, arquivoBackup, "-d")
+set sc=\$SYSTEM.OBJ.LoadDir("D:/IRIS_Server/projectGit/src/", "ck", , 1)
+if 'sc hang 2 halt
+do \$zf(-1,"exit 0")
+halt
+"""
+                    bat 'mkdir scripts 2>nul || exit 0'
+                    writeFile file: 'scripts/importar.script', text: importarScriptConteudo, encoding: 'UTF-8'
+                }
+                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\importar.script'
             }
         }
+        
         stage('4. Executar Testes Unitários') {            
             when {
                 allOf {
-                    // 1. A pasta 'tests' precisa existir no repositório
                     expression { return fileExists('tests') }
-                    
-                    // 2. A branch atual NÃO pode ser a 'production'
                     not { branch 'production' }
-                    
-                    // 3. A mensagem do commit NÃO pode conter o texto '[skip test]' ou '[skip ci]'
                     expression { 
                         def changeLogSets = currentBuild.changeSets
                         def commitMessage = changeLogSets.collect { set -> set.items.collect { item -> item.msg }.join(' ') }.join(' ')
@@ -61,34 +66,32 @@ pipeline {
                 timeout(time: 1, unit: 'MINUTES')
             }
             steps {
-                echo '🧪 Executando bateria de testes unitários de forma dinâmica...'
-                
-                // FIX: Envelopando a lógica Groovy dentro de um bloco script válido
+                echo '🧪 Executando bateria de testes unitários com retenção inteligente...'
                 script {
-                    // 1. Normaliza as barras do caminho do Workspace para o padrão do IRIS (barras normais /)
                     def irisWorkspacePath = "${WORKSPACE}".replace('\\', '/')
                     
-                    // ABORDAGEM CANÔNICA: Executa os testes, pega o ID gerado e lê a lista binária mapeada na documentação do IRIS
                     def testeScriptConteudo = """zn "USER"
-                                                set ^UnitTestRoot="${irisWorkspacePath}"
-                                                set sc=##class(%UnitTest.Manager).RunTest("tests", "/load/compile")
-                                                set lastId=\$order(^UnitTest.Result(""), -1)
-                                                set statusValido=1
-                                                if lastId'="" { set dadosSuite=\$get(^UnitTest.Result(lastId, "tests")) if dadosSuite'="" set statusValido=\$listget(dadosSuite, 1) }
-                                                if ('sc) || (statusValido=0) hang 2 halt
-                                                do \$zf(-1,"exit 0")
-                                                halt
-                                                """
-                    
-                    // 3. Cria a pasta build se não existir e grava o script de teste dinâmico lá dentro
-                    bat 'mkdir build 2>nul || exit 0'
-                    writeFile file: 'build/executar_testes.script', text: testeScriptConteudo, encoding: 'UTF-8'
+set primeiroId=\$order(^UnitTest.Result(""))
+if primeiroId'="" { set dataCriacao=\$listget(\$get(^UnitTest.Result(primeiroId)), 1) if dataCriacao'="" { set dataH=\$zdatetimeh(dataCriacao, 3, 1) set diasAntigo=\$piece(dataH, ",", 1) set diasHoje=\$piece(\$horolog, ",", 1) if (diasHoje - diasAntigo) >= 7 { do ##class(%UnitTest.Result.TestInstance).%DeleteExtent() } } }
+set ^UnitTestRoot="${irisWorkspacePath}"
+set sc=##class(%UnitTest.Manager).RunTest("tests", "/load/compile")
+set lastId=\$order(^UnitTest.Result(""), -1)
+set statusValido=1
+if lastId'="" { set dadosSuite=\$get(^UnitTest.Result(lastId, "tests")) if dadosSuite'="" set statusValido=\$listget(dadosSuite, 1) }
+if ('sc) || (statusValido=0) hang 2 halt
+do \$zf(-1,"exit 0")
+halt
+"""
+                    bat 'mkdir scripts 2>nul || exit 0'
+                    writeFile file: 'scripts/executar_testes.script', text: testeScriptConteudo, encoding: 'UTF-8'
                 }
-                
-                // 4. Executa o teste de forma isolada e limpa (Sem misturar argumentos no prompt do IRIS)
-                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < build\\executar_testes.script'
+                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\executar_testes.script'
+                script {
+                    currentBuild.result = 'SUCCESS'
+                }
             }
         }
+        
         stage('5. Gerar Artefato de Release') {
             when {
                 expression { 
@@ -104,45 +107,32 @@ pipeline {
                 timeout(time: 1, unit: 'MINUTES')
             }
             steps {
-                echo '📦 Testes aprovados! Gerando script e pacote consolidado dinamicamente...'
-                
+                echo '📦 Testes aprovados com louvor! Exportando pacote consolidado .xml para implantação...'
                 script {
-                    // 1. Cria a pasta build local no Workspace atual usando o Jenkins
-                    bat 'mkdir build 2>nul || exit 0'
-                    
-                    // 2. Normaliza as barras do caminho do Workspace para o padrão do IRIS (barras normais /)
                     def irisWorkspacePath = "${WORKSPACE}".replace('\\', '/')
-                    
-                    // 3. Monta o script ObjectScript em uma única linha contínua perfeita
-                    def scriptConteudo = "zn \"USER\" " +
-                                         "set arquivoRelease=\"${irisWorkspacePath}/build/release.xml\",classesParaExportar=\"util.*.cls\",sc=1 " +
-                                         "set sc=\$SYSTEM.OBJ.Export(classesParaExportar,arquivoRelease,\"-d\") " +
-                                         "if sc do \$zf(-1,\"exit 0\") " +
-                                         "halt\n"
-                    
-                    // 4. Grava o arquivo de script dinâmico direto na pasta do build atual
-                    writeFile file: 'build/gerar_release.script', text: scriptConteudo, encoding: 'UTF-8'
+                    def scriptConteudo = """zn "USER"
+set arquivoRelease="${irisWorkspacePath}/scripts/release.xml"
+set classesParaExportar="src.*.cls"
+set sc=\$SYSTEM.OBJ.Export(classesParaExportar,arquivoRelease,"-d")
+if sc do \$zf(-1,"exit 0")
+halt
+"""
+                    bat 'mkdir scripts 2>nul || exit 0'
+                    writeFile file: 'scripts/gerar_release.script', text: scriptConteudo, encoding: 'UTF-8'
                 }
                 
-                // 5. O IRIS executa o script dinâmico gerado pelo Jenkins que já possui o caminho correto gravado textualmente
-                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < build\\gerar_release.script || exit 0'
+                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\gerar_release.script || exit 0'
+                bat "ren scripts\\release.xml release_build_${env.BUILD_NUMBER}.xml"
+                archiveArtifacts artifacts: "scripts/release_build_${env.BUILD_NUMBER}.xml", fingerprint: true
                 
-                // 6. Renomeia o arquivo gerado de forma garantida
-                bat "ren build\\release.xml release_build_${env.BUILD_NUMBER}.xml"
-                
-                // 7. Arquiva o artefato final indexado
-                archiveArtifacts artifacts: "build/release_build_${env.BUILD_NUMBER}.xml", fingerprint: true
-                
-                // 8. Notificação segura para o Discord (Corrigida sem aspas simples internas)
                 withCredentials([string(credentialsId: env.DISCORD_WEBHOOK_ID, variable: 'WEBHOOK_SECRET')]) {
                     script {
-                        def releasePayload = """{
-                            "content": "📦 **NOVA RELEASE DISPONÍVEL!**\\n**Projeto:** ${env.JOB_NAME}\\n**Branch:** ${env.BRANCH_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚀 *O artefato consolidado release_build_${env.BUILD_NUMBER}.xml foi gerado com sucesso! O pacote já está arquivado no painel do Jenkins e pronto para ser implantado em Produção.*"
-                        }"""
-                        def jsonRelease = releasePayload.replaceAll('\n', '').replaceAll('\r', '')
-                        
-                        // FIX: Alterado de aspas simples para aspas duplas escapadas (\") no argumento do GetBytes para blindar o PowerShell
-                        powershell "Invoke-RestMethod -Uri \$env:WEBHOOK_SECRET -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${jsonRelease}')) -ContentType 'application/json; charset=utf-8'"
+                        def mensagemTexto = "📦 **NOVA RELEASE DISPONÍVEL!**\\n**Projeto:** ${env.JOB_NAME}\\n**Branch:** ${env.BRANCH_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚀 *O artefato consolidado release_build_${env.BUILD_NUMBER}.xml foi gerado com sucesso a partir do pacote src! O pacote já está arquivado no painel do Jenkins e pronto para Produção.*"
+                        powershell """
+                            \$msgObj = @{ content = "${mensagemTexto}" }
+                            \$jsonBody = \$msgObj | ConvertTo-Json -Compress
+                            Invoke-RestMethod -Uri \$env:WEBHOOK_SECRET -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes(\$jsonBody)) -ContentType 'application/json; charset=utf-8'
+                        """
                     }
                 }
             }
@@ -151,33 +141,38 @@ pipeline {
     
     post {
         failure {
-            echo '🚨 Os testes falharam! Voltando o servidor para o estado anterior usando o backup...'
-            bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < D:\\IRIS_Server\\rollback.script || exit 0'
+            echo '🚨 O build falhou ou os testes quebraram! Executando Rollback automático via ObjectScript...'
+            script {
+                def rollbackScriptConteudo = """zn "USER"
+set arquivoBackup="D:\\IRIS_Server\\backup_anterior.xml"
+if ##class(%File).Exists(arquivoBackup) set sc=\$SYSTEM.OBJ.Load(arquivoBackup, "ck")
+halt
+"""
+                writeFile file: 'scripts/rollback.script', text: rollbackScriptConteudo, encoding: 'UTF-8'
+            }
+            bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\rollback.script || exit 0'
 
-            // FIX: Mapeamento de credencial corrigido para evitar o NullPointerException
             withCredentials([string(credentialsId: env.DISCORD_WEBHOOK_ID, variable: 'WEBHOOK_SECRET')]) {
                 script {
-                    def msgPayload = """{
-                        "content": "❌ **Pipeline FALHOU!**\\n**Projeto:** ${env.JOB_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚨 *Os testes unitários falharam ou a esteira quebrou. O procedimento de Rollback automático foi executado e o servidor foi restaurado.*"
-                    }"""
-
-                    def jsonPronto = msgPayload.replaceAll('\n', '').replaceAll('\r', '')
-                    powershell "Invoke-RestMethod -Uri \$env:WEBHOOK_SECRET -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${jsonPronto}')) -ContentType 'application/json; charset=utf-8'"
+                    def mensagemTexto = "❌ **Pipeline FALHOU!**\\n**Projeto:** ${env.JOB_NAME}\\n**Branch:** ${env.BRANCH_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚨 *Os testes unitários falharam ou a esteira quebrou. O procedimento de Rollback automático foi executado e o ambiente local foi restaurado.*"
+                    powershell """
+                        \$msgObj = @{ content = "${mensagemTexto}" }
+                        \$jsonBody = \$msgObj | ConvertTo-Json -Compress
+                        Invoke-RestMethod -Uri \$env:WEBHOOK_SECRET -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes(\$jsonBody)) -ContentType 'application/json; charset=utf-8'
+                    """
                 }
             }
        }
         success {
-            echo '✅ Pipeline concluído com sucesso. Nenhuma falha detectada!'
-
-            // FIX: Mapeamento de credencial corrigido para evitar o NullPointerException
+            echo '✅ Pipeline concluído com sucesso total. Nenhuma inconsistência detectada!'
             withCredentials([string(credentialsId: env.DISCORD_WEBHOOK_ID, variable: 'WEBHOOK_SECRET')]) {
                 script {
-                    def msgPayload = """{
-                        "content": "✅ **Pipeline SUCESSO!**\\n**Projeto:** ${env.JOB_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚀 *Alterações publicadas com sucesso no InterSystems IRIS!*"
-                    }"""
-                    
-                    def jsonPronto = msgPayload.replaceAll('\n', '').replaceAll('\r', '')
-                    powershell "Invoke-RestMethod -Uri \$env:WEBHOOK_SECRET -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes('${jsonPronto}')) -ContentType 'application/json; charset=utf-8'"
+                    def mensagemTexto = "✅ **Pipeline SUCESSO!**\\n**Projeto:** ${env.JOB_NAME}\\n**Branch:** ${env.BRANCH_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚀 *Alterações publicadas com sucesso no InterSystems IRIS e pacote de release generado com segurança!*"
+                    powershell """
+                        \$msgObj = @{ content = "${mensagemTexto}" }
+                        \$jsonBody = \$msgObj | ConvertTo-Json -Compress
+                        Invoke-RestMethod -Uri \$env:WEBHOOK_SECRET -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes(\$jsonBody)) -ContentType 'application/json; charset=utf-8'
+                    """
                 }
             }
         }
