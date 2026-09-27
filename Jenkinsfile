@@ -3,7 +3,6 @@ pipeline {
 
     options {
         buildDiscarder(logRotator(numToKeepStr: '10', artifactNumToKeepStr: '10'))
-        timeout(time: 1, unit: 'HOURS')
     }
 
     environment {
@@ -28,9 +27,6 @@ pipeline {
         }
         
         stage('3. Backup e Deploy no IRIS') {
-            options {
-                timeout(time: 30, unit: 'MINUTES') 
-            }
             steps {
                 echo '📦 Criando snapshot de segurança e aplicando novo código fonte no pacote src...'
                 script {
@@ -60,9 +56,6 @@ pipeline {
                         return !commitMessage.contains('[skip test]') && !commitMessage.contains('[skip ci]')
                     }
                 }
-            }
-            options {
-                timeout(time: 10, unit: 'MINUTES')
             }
             steps {
                 echo '🧪 Executando bateria de testes unitários com retenção inteligente...'
@@ -101,9 +94,6 @@ pipeline {
                     }
                     return commitMessage.contains('[release]')
                 }
-            }                
-            options {
-                timeout(time: 1, unit: 'MINUTES')
             }
             steps {
                 echo '📦 Testes aprovados com louvor! Exportando pacote consolidado .xml para implantação...'
@@ -126,11 +116,11 @@ pipeline {
                 
                 withCredentials([string(credentialsId: env.DISCORD_WEBHOOK_ID, variable: 'WEBHOOK_SECRET')]) {
                     script {
-                        def mensagemTexto = "📦 **NOVA RELEASE DISPONÍVEL!**\\n**Projeto:** ${env.JOB_NAME}\\n**Branch:** ${env.BRANCH_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚀 *O artefato consolidado release_build_${env.BUILD_NUMBER}.xml foi gerado com sucesso a partir do pacote src! O pacote já está arquivado no painel do Jenkins e pronto para Produção.*"
                         powershell """
-                            \$msgObj = @{ content = "${mensagemTexto}" }
-                            \$jsonBody = \$msgObj | ConvertTo-Json -Compress
-                            Invoke-RestMethod -Uri \$env:WEBHOOK_SECRET -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes(\$jsonBody)) -ContentType 'application/json; charset=utf-8'
+                            \$corpo = @{
+                                content = "📦 **NOVA RELEASE DISPONÍVEL!**`n**Projeto:** ${env.JOB_NAME}`n**Branch:** ${env.BRANCH_NAME}`n**Build:** #${env.BUILD_NUMBER}`n🚀 *O artefato consolidado release_build_\${env.BUILD_NUMBER}.xml foi gerado com sucesso! O pacote está seguro na pasta externa D:\\\\IRIS_Server\\\\build e arquivado no Jenkins.*"
+                            } | ConvertTo-Json -Compress
+                            Invoke-RestMethod -Uri \$env:WEBHOOK_SECRET -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes(\$corpo)) -ContentType 'application/json; charset=utf-8'
                         """
                     }
                 }
@@ -153,11 +143,11 @@ pipeline {
 
             withCredentials([string(credentialsId: env.DISCORD_WEBHOOK_ID, variable: 'WEBHOOK_SECRET')]) {
                 script {
-                    def mensagemTexto = "❌ **Pipeline FALHOU!**\\n**Projeto:** ${env.JOB_NAME}\\n**Branch:** ${env.BRANCH_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚨 *Os testes unitários falharam ou a esteira quebrou. O procedimento de Rollback automático foi executado e o ambiente local foi restaurado.*"
                     powershell """
-                        \$msgObj = @{ content = "${mensagemTexto}" }
-                        \$jsonBody = \$msgObj | ConvertTo-Json -Compress
-                        Invoke-RestMethod -Uri \$env:WEBHOOK_SECRET -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes(\$jsonBody)) -ContentType 'application/json; charset=utf-8'
+                        \$corpo = @{
+                            content = "❌ **Pipeline FALHOU!**`n**Projeto:** ${env.JOB_NAME}`n**Branch:** ${env.BRANCH_NAME}`n**Build:** #${env.BUILD_NUMBER}`n🚨 *Os testes unitários falharam ou a esteira quebrou. O procedimento de Rollback automático foi executado e o ambiente local foi restaurado.*"
+                        } | ConvertTo-Json -Compress
+                        Invoke-RestMethod -Uri \$env:WEBHOOK_SECRET -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes(\$corpo)) -ContentType 'application/json; charset=utf-8'
                     """
                 }
             }
@@ -166,11 +156,11 @@ pipeline {
             echo '✅ Pipeline concluído com sucesso total. Nenhuma inconsistência detectada!'
             withCredentials([string(credentialsId: env.DISCORD_WEBHOOK_ID, variable: 'WEBHOOK_SECRET')]) {
                 script {
-                    def mensagemTexto = "✅ **Pipeline SUCESSO!**\\n**Projeto:** ${env.JOB_NAME}\\n**Branch:** ${env.BRANCH_NAME}\\n**Build:** #${env.BUILD_NUMBER}\\n🚀 *Alterações publicadas com sucesso no InterSystems IRIS e pacote de release generado com segurança!*"
                     powershell """
-                        \$msgObj = @{ content = "${mensagemTexto}" }
-                        \$jsonBody = \$msgObj | ConvertTo-Json -Compress
-                        Invoke-RestMethod -Uri \$env:WEBHOOK_SECRET -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes(\$jsonBody)) -ContentType 'application/json; charset=utf-8'
+                        \$corpo = @{
+                            content = "✅ **Pipeline SUCESSO!**`n**Projeto:** ${env.JOB_NAME}`n**Branch:** ${env.BRANCH_NAME}`n**Build:** #${env.BUILD_NUMBER}`n🚀 *Alterações publicadas com sucesso no InterSystems IRIS e pacote de release gerado com segurança!*"
+                        } | ConvertTo-Json -Compress
+                        Invoke-RestMethod -Uri \$env:WEBHOOK_SECRET -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes(\$corpo)) -ContentType 'application/json; charset=utf-8'
                     """
                 }
             }
