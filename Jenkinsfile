@@ -74,7 +74,7 @@ pipeline {
                                                 set sc=##class(%UnitTest.Manager).RunTest("tests", "/load/compile")
                                                 set lastId=\$order(^UnitTest.Result(""), -1)
                                                 set statusValido=1
-                                                if lastId'="" { set obj=##class(%UnitTest.Result.TestInstance).%OpenId(lastId) if \$isobject(obj) set statusValido=obj.Status }
+                                                if lastId'="" { set obj=##class(%UnitTest.Result.TestAssert).%OpenId(lastId) if \$isobject(obj) set statusValido=obj.Status }
                                                 if ('sc) || (statusValido=0) hang 2 halt
                                                 do \$zf(-1,"exit 0")
                                                 halt
