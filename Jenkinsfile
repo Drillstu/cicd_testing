@@ -64,7 +64,7 @@ halt
                     def testeScriptConteudo = """zn "USER"
 set primeiroId=\$order(^UnitTest.Result(""))
 if primeiroId'="" { set dataCriacao=\$listget(\$get(^UnitTest.Result(primeiroId)), 1) if dataCriacao'="" { set dataH=\$zdatetimeh(dataCriacao, 3, 1) set diasAntigo=\$piece(dataH, ",", 1) set diasHoje=\$piece(\$horolog, ",", 1) if (diasHoje - diasAntigo) >= 7 { do ##class(%UnitTest.Result.TestInstance).%DeleteExtent() } } }
-set ^UnitTestRoot="\${irisWorkspacePath}"
+set ^UnitTestRoot="${irisWorkspacePath}"
 set sc=##class(%UnitTest.Manager).RunTest("tests", "/load/compile")
 set lastId=\$order(^UnitTest.Result(""), -1)
 set statusValido=1
@@ -99,7 +99,7 @@ halt
                 script {
                     def irisWorkspacePath = "\${WORKSPACE}".replace('\\', '/')
                     def scriptConteudo = """zn "USER"
-set arquivoRelease="\${irisWorkspacePath}/build/release.xml"
+set arquivoRelease="${irisWorkspacePath}/build/release.xml"
 set classesParaExportar="src.*.cls"
 set sc=\$SYSTEM.OBJ.Export(classesParaExportar,arquivoRelease,"-d")
 halt
