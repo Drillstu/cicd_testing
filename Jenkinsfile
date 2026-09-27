@@ -62,14 +62,15 @@ pipeline {
                     // 1. Normaliza as barras do caminho do Workspace para o padrão do IRIS (barras normais /)
                     def irisWorkspacePath = "${WORKSPACE}".replace('\\', '/')
                     
-                    // 2. Monta o ObjectScript contendo a validação real de falhas que conversamos
-                    def testeScriptConteudo = "zn \"USER\" " +
-                                              "set ^UnitTestRoot=\"${irisWorkspacePath}\" " +
-                                              "set sc=##class(%UnitTest.Manager).RunTest(\"tests\", \"/load/compile\") " +
-                                              "set testFailed=\$data(^UnitTest.Result) && (\$get(^UnitTest.Result)=\"0\" || \$order(^UnitTest.Result(\"\"))'=\"\") " +
-                                              "if ('sc) || (testFailed) hang 2 halt " +
-                                              "do \$zf(-1,\"exit 0\") " +
-                                              "halt\n"
+                    // 2. Monta o ObjectScript com quebras de linha reais para o IRIS ler perfeitamente por linha
+                    def testeScriptConteudo = """zn "USER"
+                                            set ^UnitTestRoot="${irisWorkspacePath}"
+                                            set sc=##class(%UnitTest.Manager).RunTest("tests", "/load/compile")
+                                            set testFailed=\$data(^UnitTest.Result) && (\$get(^UnitTest.Result)="0" || \$order(^UnitTest.Result(""))'="")
+                                            if ('sc) || (testFailed) hang 2 halt
+                                            do \$zf(-1,"exit 0")
+                                            halt
+                                            """
                     
                     // 3. Cria a pasta build se não existir e grava o script de teste dinâmico lá dentro
                     bat 'mkdir build 2>nul || exit 0'
