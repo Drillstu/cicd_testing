@@ -57,9 +57,27 @@ pipeline {
             steps {
                 echo '🧪 Executando bateria de testes unitários de forma dinâmica...'
                 
-                // O argumento "${WORKSPACE}" entra antes do injetor de script (<) eliminando caminhos estáticos!
-                def irisWorkspacePath = "${WORKSPACE}".replace('\\', '/')
-                bat "\"D:\\InterSystems\\IRIS\\bin\\irissession\" IRIS \"${irisWorkspacePath} < D:\\IRIS_Server\\testes.script || exit 0"
+                // FIX: Envelopando a lógica Groovy dentro de um bloco script válido
+                script {
+                    // 1. Normaliza as barras do caminho do Workspace para o padrão do IRIS (barras normais /)
+                    def irisWorkspacePath = "${WORKSPACE}".replace('\\', '/')
+                    
+                    // 2. Monta o ObjectScript contendo a validação real de falhas que conversamos
+                    def testeScriptConteudo = "zn \"USER\" " +
+                                              "set ^UnitTestRoot=\"${irisWorkspacePath}\" " +
+                                              "set sc=##class(%UnitTest.Manager).RunTest(\"tests\", \"/load/compile\") " +
+                                              "set testFailed=\$data(^UnitTest.Result) && (\$get(^UnitTest.Result)=\"0\" || \$order(^UnitTest.Result(\"\"))'=\"\") " +
+                                              "if ('sc) || (testFailed) hang 2 halt " +
+                                              "do \$zf(-1,\"exit 0\") " +
+                                              "halt\n"
+                    
+                    // 3. Cria a pasta build se não existir e grava o script de teste dinâmico lá dentro
+                    bat 'mkdir build 2>nul || exit 0'
+                    writeFile file: 'build/executar_testes.script', text: testeScriptConteudo, encoding: 'UTF-8'
+                }
+                
+                // 4. Executa o teste de forma isolada e limpa (Sem misturar argumentos no prompt do IRIS)
+                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < build\\executar_testes.script'
             }
         }
         stage('5. Gerar Artefato de Release') {
