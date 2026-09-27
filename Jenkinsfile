@@ -3,6 +3,7 @@ pipeline {
 
     options {
         buildDiscarder(logRotator(numToKeepStr: '10', artifactNumToKeepStr: '10'))
+        timeout(time: 1, unit: 'HOURS')
     }
 
     environment {
@@ -27,6 +28,9 @@ pipeline {
         }
         
         stage('3. Backup e Deploy no IRIS') {
+            options {
+                timeout(time: 30, unit: 'MINUTES') 
+            }
             steps {
                 echo '📦 Criando snapshot de segurança e aplicando novo código fonte no pacote src...'
                 script {
@@ -56,6 +60,9 @@ halt
                         return !commitMessage.contains('[skip test]') && !commitMessage.contains('[skip ci]')
                     }
                 }
+            }
+            options {
+                timeout(time: 10, unit: 'MINUTES')
             }
             steps {
                 echo '🧪 Executando bateria de testes unitários com retenção inteligente...'
@@ -94,7 +101,10 @@ halt
                     }
                     return commitMessage.contains('[release]')
                 }
-            }                
+            }  
+            options {
+                timeout(time: 3, unit: 'MINUTES')
+            }             
             steps {
                 echo '📦 Testes aprovados com louvor! Exportando pacote consolidado .xml para o histórico...'
                 script {
@@ -111,7 +121,7 @@ halt
                 bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\gerar_release.script || exit 0'
                 
                 bat "ren build\\release.xml release_build_${env.BUILD_NUMBER}.xml"
-                archiveArtifacts artifacts: "release_build_${env.BUILD_NUMBER}.xml", fingerprint: true
+                archiveArtifacts artifacts: "build\\release_build_${env.BUILD_NUMBER}.xml", fingerprint: true
                 bat 'mkdir D:\\IRIS_Server\\releases 2>nul || exit 0'
                 bat "move ${WORKSPACE}\\build\\release_build_${env.BUILD_NUMBER}.xml D:\\IRIS_Server\\releases\\release_build_${env.BUILD_NUMBER}.xml"
                 
