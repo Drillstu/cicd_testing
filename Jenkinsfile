@@ -31,7 +31,7 @@ pipeline {
                 echo '📦 Criando snapshot de segurança e aplicando novo código fonte no pacote src...'
                 script {
                     def importarScriptConteudo = """zn "USER"
-set arquivoBackup="D:\\\\IRIS_Server\\\\backup_anterior.xml"
+set arquivoBackup="D:\\\\IRIS_Server\\\\backup\\\\backup_anterior.xml"
 set pacoteAlvo="src"
 do \$SYSTEM.OBJ.ExportPackage(pacoteAlvo, arquivoBackup, "-d")
 set sc=\$SYSTEM.OBJ.LoadDir("D:/IRIS_Server/projectGit/src/", "ck", , 1)
@@ -40,6 +40,7 @@ halt
 """
                     writeFile file: 'scripts/importar.script', text: importarScriptConteudo, encoding: 'UTF-8'
                 }
+                bat 'mkdir D:\\IRIS_Server\\backup 2>nul || exit 0'
                 bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\importar.script || exit 0'
             }
         }
@@ -109,16 +110,16 @@ halt
                 
                 bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\gerar_release.script || exit 0'
                 
-                bat 'mkdir D:\\IRIS_Server\\build 2>nul || exit 0'
-                bat "move build\\release.xml D:\\IRIS_Server\\build\\release_build_\${env.BUILD_NUMBER}.xml"
+                bat 'mkdir D:\\IRIS_Server\\releases 2>nul || exit 0'
+                bat "move ${WORKSPACE}\build\\release.xml D:\\IRIS_Server\\releases\\release_build_${env.BUILD_NUMBER}.xml"
                 
-                archiveArtifacts artifacts: "D:\\IRIS_Server\\build\\release_build_\${env.BUILD_NUMBER}.xml", fingerprint: true
+                archiveArtifacts artifacts: "D:\\IRIS_Server\\releases\\release_build_${env.BUILD_NUMBER}.xml", fingerprint: true
                 
                 withCredentials([string(credentialsId: env.DISCORD_WEBHOOK_ID, variable: 'WEBHOOK_SECRET')]) {
                     script {
                         powershell """
                             \$corpo = @{
-                                content = "📦 **NOVA RELEASE DISPONÍVEL!**`n**Projeto:** ${env.JOB_NAME}`n**Branch:** \${env.BRANCH_NAME}`n**Build:** #${env.BUILD_NUMBER}`n🚀 *O artefato consolidado release_build_\${env.BUILD_NUMBER}.xml foi gerado com sucesso! O pacote está seguro na pasta externa D:\\\\IRIS_Server\\\\build e arquivado no Jenkins.*"
+                                content = "📦 **NOVA RELEASE DISPONÍVEL!**`n**Projeto:** ${env.JOB_NAME}`n**Branch:** ${env.BRANCH_NAME}`n**Build:** #${env.BUILD_NUMBER}`n🚀 *O artefato consolidado release_build_${env.BUILD_NUMBER}.xml foi gerado com sucesso! O pacote está seguro na pasta externa D:\\\\IRIS_Server\\\\releases e arquivado no Jenkins.*"
                             } | ConvertTo-Json -Compress
                             Invoke-RestMethod -Uri \$env:WEBHOOK_SECRET -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes(\$corpo)) -ContentType 'application/json; charset=utf-8'
                         """
@@ -133,7 +134,7 @@ halt
             echo '🚨 O build falhou ou os testes quebraram! Executando Rollback automático via ObjectScript...'
             script {
                 def rollbackScriptConteudo = """zn "USER"
-set arquivoBackup="D:\\\\IRIS_Server\\\\backup_anterior.xml"
+set arquivoBackup="D:\\\\IRIS_Server\\\\backup\\\\backup_anterior.xml"
 if ##class(%File).Exists(arquivoBackup) set sc=\$SYSTEM.OBJ.Load(arquivoBackup, "ck")
 halt
 """
@@ -145,7 +146,7 @@ halt
                 script {
                     powershell """
                         \$corpo = @{
-                            content = "❌ **Pipeline FALHOU!**`n**Projeto:** ${env.JOB_NAME}`n**Branch:** \${env.BRANCH_NAME}`n**Build:** #${env.BUILD_NUMBER}`n🚨 *Os testes unitários falharam ou a esteira quebrou. O procedimento de Rollback automático foi executado e o ambiente local foi restaurado.*"
+                            content = "❌ **Pipeline FALHOU!**`n**Projeto:** ${env.JOB_NAME}`n**Branch:** ${env.BRANCH_NAME}`n**Build:** #${env.BUILD_NUMBER}`n🚨 *Os testes unitários falharam ou a esteira quebrou. O procedimento de Rollback automático foi executado e o ambiente local foi restaurado.*"
                         } | ConvertTo-Json -Compress
                         Invoke-RestMethod -Uri \$env:WEBHOOK_SECRET -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes(\$corpo)) -ContentType 'application/json; charset=utf-8'
                     """
@@ -158,7 +159,7 @@ halt
                 script {
                     powershell """
                         \$corpo = @{
-                            content = "✅ **Pipeline SUCESSO!**`n**Projeto:** ${env.JOB_NAME}`n**Branch:** \${env.BRANCH_NAME}`n**Build:** #${env.BUILD_NUMBER}`n🚀 *Alterações publicadas com sucesso no InterSystems IRIS e pacote de release gerado com segurança!*"
+                            content = "✅ **Pipeline SUCESSO!**`n**Projeto:** ${env.JOB_NAME}`n**Branch:** ${env.BRANCH_NAME}`n**Build:** #${env.BUILD_NUMBER}`n🚀 *Alterações publicadas com sucesso no InterSystems IRIS e pacote de release gerado com segurança!*"
                         } | ConvertTo-Json -Compress
                         Invoke-RestMethod -Uri \$env:WEBHOOK_SECRET -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes(\$corpo)) -ContentType 'application/json; charset=utf-8'
                     """
