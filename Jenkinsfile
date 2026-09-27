@@ -111,7 +111,7 @@ halt
                 bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\gerar_release.script || exit 0'
                 
                 bat 'mkdir D:\\IRIS_Server\\releases 2>nul || exit 0'
-                bat "move ${WORKSPACE}\build\\release.xml D:\\IRIS_Server\\releases\\release_build_${env.BUILD_NUMBER}.xml"
+                bat "move ${WORKSPACE}\\build\\release.xml D:\\IRIS_Server\\releases\\release_build_${env.BUILD_NUMBER}.xml"
                 
                 archiveArtifacts artifacts: "D:\\IRIS_Server\\releases\\release_build_${env.BUILD_NUMBER}.xml", fingerprint: true
                 
