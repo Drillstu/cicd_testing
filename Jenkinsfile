@@ -18,11 +18,10 @@ pipeline {
             }
         }
         
-        stage('2. Copiar para o Servidor') {
+                stage('2. Copiar para o Servidor') {
             steps {
                 echo '🧹 Limpando resíduos de builds antigos e espelhando repositório no servidor local...'
-                bat 'rmdir /q /s D:\\IRIS_Server\\projectGit 2>nul || exit 0'
-                bat 'mkdir D:\\IRIS_Server\\projectGit'
+                bat 'del /q /s D:\\IRIS_Server\\projectGit\\* 2>nul || exit 0'
                 bat 'xcopy /E /Y . D:\\IRIS_Server\\projectGit\\'
             }
         }
@@ -32,7 +31,7 @@ pipeline {
                 timeout(time: 1, unit: 'MINUTES') 
             }
             steps {
-                echo '📦 Criando snapshot de segurança e aplicando novo código novo...'
+                echo '📦 Criando snapshot de segurança e aplicando novo código fonte no pacote src...'
                 script {
                     def importarScriptConteudo = """zn "USER"
 set arquivoBackup="D:\\IRIS_Server\\backup_anterior.xml"
@@ -46,7 +45,12 @@ halt
                     bat 'mkdir scripts 2>nul || exit 0'
                     writeFile file: 'scripts/importar.script', text: importarScriptConteudo, encoding: 'UTF-8'
                 }
+                
                 bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\importar.script'
+                
+                script {
+                    currentBuild.result = 'SUCCESS'
+                }
             }
         }
         
