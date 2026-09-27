@@ -110,10 +110,10 @@ halt
                 
                 bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\gerar_release.script || exit 0'
                 
+                bat "ren build\\release.xml release_build_${env.BUILD_NUMBER}.xml"
+                archiveArtifacts artifacts: "release_build_${env.BUILD_NUMBER}.xml", fingerprint: true
                 bat 'mkdir D:\\IRIS_Server\\releases 2>nul || exit 0'
-                bat "move ${WORKSPACE}\\build\\release.xml D:\\IRIS_Server\\releases\\release_build_${env.BUILD_NUMBER}.xml"
-                
-                archiveArtifacts artifacts: "D:\\IRIS_Server\\releases\\release_build_${env.BUILD_NUMBER}.xml", fingerprint: true
+                bat "move ${WORKSPACE}\\build\\release_build_${env.BUILD_NUMBER}.xml D:\\IRIS_Server\\releases\\release_build_${env.BUILD_NUMBER}.xml"
                 
                 withCredentials([string(credentialsId: env.DISCORD_WEBHOOK_ID, variable: 'WEBHOOK_SECRET')]) {
                     script {
