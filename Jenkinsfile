@@ -21,7 +21,13 @@ pipeline {
         }
         stage('2. Copiar para o Servidor') {
             steps {
-                bat 'del /q /s D:\\IRIS_Server\\projectGit\\* 2>nul'
+                echo '🧹 Limpando resíduos antigos e espelhando repositório no servidor...'
+                
+                // Correção definitiva de pastas: rmdir apaga a pasta inteira e os subdiretórios antigos vazios
+                bat 'rmdir /q /s D:\\IRIS_Server\\projectGit 2>nul || exit 0'
+                bat 'mkdir D:\\IRIS_Server\\projectGit'
+                
+                // Copia a estrutura nova perfeitamente limpa
                 bat 'xcopy /E /Y . D:\\IRIS_Server\\projectGit\\'
             }
         }
@@ -62,15 +68,17 @@ pipeline {
                     // 1. Normaliza as barras do caminho do Workspace para o padrão do IRIS (barras normais /)
                     def irisWorkspacePath = "${WORKSPACE}".replace('\\', '/')
                     
-                    // 2. Monta o ObjectScript com quebras de linha reais para o IRIS ler perfeitamente por linha
+                    // LÓGICA NATIVA: Instancia o manager, roda o teste, pega o LogIndex atual e checa se o nó de Status da execução foi igual a 0 (Falha)
                     def testeScriptConteudo = """zn "USER"
-                                            set ^UnitTestRoot="${irisWorkspacePath}"
-                                            set sc=##class(%UnitTest.Manager).RunTest("tests", "/load/compile")
-                                            set testFailed=\$data(^UnitTest.Result) && (\$get(^UnitTest.Result)="0" || \$order(^UnitTest.Result(""))'="")
-                                            if ('sc) || (testFailed) hang 2 halt
-                                            do \$zf(-1,"exit 0")
-                                            halt
-                                            """
+                                                set ^UnitTestRoot="${irisWorkspacePath}"
+                                                set manager=##class(%UnitTest.Manager).%New()
+                                                set sc=manager.RunTest("tests", "/load/compile")
+                                                set idx=manager.LogIndex
+                                                set statusAtual=\$get(^UnitTest.Result(idx))
+                                                if ('sc) || (statusAtual=0) hang 2 halt
+                                                do \$zf(-1,"exit 0")
+                                                halt
+                                                """
                     
                     // 3. Cria a pasta build se não existir e grava o script de teste dinâmico lá dentro
                     bat 'mkdir build 2>nul || exit 0'
