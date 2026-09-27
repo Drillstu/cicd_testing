@@ -29,7 +29,7 @@ pipeline {
         
         stage('3. Backup e Deploy no IRIS') {
             options {
-                timeout(time: 1, unit: 'MINUTES') 
+                timeout(time: 30, unit: 'MINUTES') 
             }
             steps {
                 echo '📦 Criando snapshot de segurança e aplicando novo código fonte no pacote src...'
