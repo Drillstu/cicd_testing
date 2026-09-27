@@ -74,7 +74,7 @@ pipeline {
                                                 set sc=##class(%UnitTest.Manager).RunTest("tests", "/load/compile")
                                                 set lastId=\$order(^UnitTest.Result(""), -1)
                                                 set statusValido=1
-                                                if lastId'="" { set dadosAmostra=\$get(^UnitTest.Result(lastId)) if dadosAmostra'="" set statusValido=\$listget(dadosAmostra, 1) }
+                                                if lastId'="" { set dadosSuite=\$get(^UnitTest.Result(lastId, "tests")) if dadosSuite'="" set statusValido=\$listget(dadosSuite, 1) }
                                                 if ('sc) || (statusValido=0) hang 2 halt
                                                 do \$zf(-1,"exit 0")
                                                 halt
