@@ -77,7 +77,10 @@ set sc=##class(%UnitTest.Manager).RunTest("tests", "/load/compile")
 set lastId=\$order(^UnitTest.Result(""), -1)
 set statusValido=1
 if lastId'="" { set dadosSuite=\$get(^UnitTest.Result(lastId, "tests")) if dadosSuite'="" set statusValido=\$listget(dadosSuite, 1) }
-if ('sc) || (statusValido=0) hang 2 halt
+set arquivoStatus=##class(%File).%New("${irisWorkspacePath}/scripts/status_testes.txt")
+do arquivoStatus.Open("WSN")
+do arquivoStatus.Write(statusValido)
+do arquivoStatus.Close()
 halt
 """
                     writeFile file: 'scripts/executar_testes.script', text: testeScriptConteudo, encoding: 'UTF-8'
@@ -86,7 +89,15 @@ halt
                 bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\executar_testes.script || exit 0'
                 
                 script {
-                    currentBuild.result = 'SUCCESS'
+                    def resultadoTestes = readFile('scripts/status_testes.txt').trim()
+                    echo "📊 Resultado capturado do portal IRIS: ${resultadoTestes}"
+                    
+                    if (resultadoTestes == "0") {
+                        error "🚨 A bateria de testes unitários falhou no InterSystems IRIS! Interrompendo a esteira."
+                    } else {
+                        echo "✅ Todos os testes passaram com sucesso!"
+                        currentBuild.result = 'SUCCESS'
+                    }
                 }
             }
         }
