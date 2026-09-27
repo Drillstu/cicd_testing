@@ -59,7 +59,7 @@ halt
             steps {
                 echo '🧪 Executando bateria de testes unitários com retenção inteligente...'
                 script {
-                    def irisWorkspacePath = "\${WORKSPACE}".replace('\\', '/')
+                    def irisWorkspacePath = "${WORKSPACE}".replace('\\', '/')
                     
                     def testeScriptConteudo = """zn "USER"
 set primeiroId=\$order(^UnitTest.Result(""))
@@ -97,7 +97,7 @@ halt
             steps {
                 echo '📦 Testes aprovados com louvor! Exportando pacote consolidado .xml para o histórico...'
                 script {
-                    def irisWorkspacePath = "\${WORKSPACE}".replace('\\', '/')
+                    def irisWorkspacePath = "${WORKSPACE}".replace('\\', '/')
                     def scriptConteudo = """zn "USER"
 set arquivoRelease="${irisWorkspacePath}/build/release.xml"
 set classesParaExportar="src.*.cls"
