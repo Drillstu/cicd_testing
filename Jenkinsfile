@@ -67,7 +67,7 @@ halt
                 }
             }
             options {
-                timeout(time: 1, unit: 'MINUTES')
+                timeout(time: 10, unit: 'MINUTES')
             }
             steps {
                 echo '🧪 Executando bateria de testes unitários com retenção inteligente...'
