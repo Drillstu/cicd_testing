@@ -18,10 +18,11 @@ pipeline {
             }
         }
         
-                stage('2. Copiar para o Servidor') {
+        stage('2. Copiar para o Servidor') {
             steps {
-                echo '🧹 Limpando resíduos de builds antigos e espelhando repositório no servidor local...'
-                bat 'del /q /s D:\\IRIS_Server\\projectGit\\* 2>nul || exit 0'
+                echo '🧹 Atualizando apenas os arquivos de código no servidor local...'
+                bat 'del /q /s D:\\IRIS_Server\\projectGit\\src\\* 2>nul || exit 0'
+                bat 'del /q /s D:\\IRIS_Server\\projectGit\\tests\\* 2>nul || exit 0'
                 bat 'xcopy /E /Y . D:\\IRIS_Server\\projectGit\\'
             }
         }
@@ -42,7 +43,6 @@ if 'sc hang 2 halt
 do \$zf(-1,"exit 0")
 halt
 """
-                    bat 'mkdir scripts 2>nul || exit 0'
                     writeFile file: 'scripts/importar.script', text: importarScriptConteudo, encoding: 'UTF-8'
                 }
                 
@@ -86,7 +86,6 @@ if ('sc) || (statusValido=0) hang 2 halt
 do \$zf(-1,"exit 0")
 halt
 """
-                    bat 'mkdir scripts 2>nul || exit 0'
                     writeFile file: 'scripts/executar_testes.script', text: testeScriptConteudo, encoding: 'UTF-8'
                 }
                 bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\executar_testes.script'
@@ -121,13 +120,17 @@ set sc=\$SYSTEM.OBJ.Export(classesParaExportar,arquivoRelease,"-d")
 if sc do \$zf(-1,"exit 0")
 halt
 """
-                    bat 'mkdir scripts 2>nul || exit 0'
                     writeFile file: 'scripts/gerar_release.script', text: scriptConteudo, encoding: 'UTF-8'
                 }
                 
                 bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\gerar_release.script || exit 0'
-                bat "ren scripts\\release.xml release_build_${env.BUILD_NUMBER}.xml"
-                archiveArtifacts artifacts: "scripts/release_build_${env.BUILD_NUMBER}.xml", fingerprint: true
+                
+                // Cria a pasta de releases externa permanente no servidor caso ela não exista
+                bat 'mkdir D:\\IRIS_Server\\build 2>nul || exit 0'
+                // Move e renomeia o arquivo gerado para o repositório de histórico seguro externa
+                bat "move build\\release.xml D:\\IRIS_Server\\build\\release_build_${env.BUILD_NUMBER}.xml"
+                
+                archiveArtifacts artifacts: "build/release_build_${env.BUILD_NUMBER}.xml", fingerprint: true
                 
                 withCredentials([string(credentialsId: env.DISCORD_WEBHOOK_ID, variable: 'WEBHOOK_SECRET')]) {
                     script {
