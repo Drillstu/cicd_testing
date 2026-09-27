@@ -68,13 +68,14 @@ pipeline {
                     // 1. Normaliza as barras do caminho do Workspace para o padrão do IRIS (barras normais /)
                     def irisWorkspacePath = "${WORKSPACE}".replace('\\', '/')
                     
-                     // SOLUÇÃO PROFISSIONAL: Abre o último objeto de instância de teste persistido para validar o status real de sucesso (Status=1)
+                    // ABORDAGEM CANÔNICA: Executa os testes, pega o ID gerado e lê a lista binária mapeada na documentação do IRIS
                     def testeScriptConteudo = """zn "USER"
+                                                do ##class(%UnitTest.Result.TestInstance).%DeleteExtent()
                                                 set ^UnitTestRoot="${irisWorkspacePath}"
                                                 set sc=##class(%UnitTest.Manager).RunTest("tests", "/load/compile")
                                                 set lastId=\$order(^UnitTest.Result(""), -1)
                                                 set statusValido=1
-                                                if lastId'="" { set obj=##class(%UnitTest.Result.TestAssert).%OpenId(lastId) if \$isobject(obj) set statusValido=obj.Status }
+                                                if lastId'="" { set dadosAmostra=\$get(^UnitTest.Result(lastId)) if dadosAmostra'="" set statusValido=\$listget(dadosAmostra, 1) }
                                                 if ('sc) || (statusValido=0) hang 2 halt
                                                 do \$zf(-1,"exit 0")
                                                 halt
