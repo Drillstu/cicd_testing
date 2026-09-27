@@ -36,45 +36,89 @@ pipeline {
                 echo '📦 Criando snapshot de segurança e aplicando novo código fonte no pacote src...'
                 
                 script {
+
+                    // ========================================
+                    // Gera o script que será executado no IRIS
+                    // ========================================
                     def importarScriptConteudo = "zn \"USER\"\n" +
-                                              "set arquivoBackup=\"D:\\\\IRIS_Server\\\\backup_anterior.xml\"\n" +
-                                              "set pacoteAlvo=\"src\"\n" +
-                                              "do \$SYSTEM.OBJ.ExportPackage(pacoteAlvo, arquivoBackup, \"-d\")\n" +
-                                              "set sc=\$SYSTEM.OBJ.LoadDir(\"D:/IRIS_Server/projectGit/src/\", \"ck\", , 1)\n" +
-                                              "write \"STATUS: \", sc,!\n" +
-                                              "if 'sc write \"ERRO_LOADDIR: \",\$SYSTEM.Status.GetErrorText(sc),!\n" +
-                                              "write \"DEPLOY CONCLUÍDO COM SUCESSO!\",!\n"
+                                                "set arquivoBackup=\"D:\\\\IRIS_Server\\\\backup_anterior.xml\"\n" +
+                                                "set arquivoStatus=\"D:\\\\IRIS_Server\\\\deploy_status.txt\"\n" +
+                                                "set pacoteAlvo=\"src\"\n" +
+                                                "do \$SYSTEM.OBJ.ExportPackage(pacoteAlvo, arquivoBackup, \"-d\")\n" +
+                                                "set sc=\$SYSTEM.OBJ.LoadDir(\"D:/IRIS_Server/projectGit/src/\", \"ck\", , 1)\n" +
+                                                "if 'sc {\n" +
+                                                "    write \"ERRO_LOADDIR: \",\$SYSTEM.Status.GetErrorText(sc),!\n" +
+                                                "    open arquivoStatus use arquivoStatus write \"ERROR\",! close\n" +
+                                                "} else {\n" +
+                                                "    write \"DEPLOY CONCLUÍDO COM SUCESSO!\",!\n" +
+                                                "    open arquivoStatus use arquivoStatus write \"OK\",! close\n" +
+                                                "}\n" +
+                                                "halt\n"
 
-                    writeFile file: 'scripts/importar.script',
-                              text: importarScriptConteudo,
-                              encoding: 'UTF-8'
-                }
-                
-                script {
-                    try {
-                        def exitCode = bat(
-                            returnStatus: true,
-                            script: '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\importar.script'
-                        )
+                    writeFile(
+                        file: 'scripts/importar.script',
+                        text: importarScriptConteudo,
+                        encoding: 'UTF-8'
+                    )
 
-                        echo "========================================"
-                        echo "IRIS DEPLOY - EXIT CODE: ${exitCode}"
-                        echo "========================================"
 
-                        if (exitCode != 0) {
-                            error "O irissession retornou código de saída ${exitCode} durante o deploy."
-                        }
+                    // ========================================
+                    // Remove resultado anterior
+                    // ========================================
+                    bat '''
+                        if exist "D:\\IRIS_Server\\deploy_status.txt" del /q "D:\\IRIS_Server\\deploy_status.txt"
+                    '''
 
-                    } catch (Exception e) {
-                        echo "========================================"
-                        echo "ERRO DURANTE O DEPLOY"
-                        echo "========================================"
-                        echo "Tipo: ${e.getClass().getName()}"
-                        echo "Mensagem: ${e.getMessage()}"
-                        echo "========================================"
 
-                        throw e
+                    // ========================================
+                    // Executa o IRIS
+                    // ========================================
+                    def exitCode = bat(
+                        returnStatus: true,
+                        script: '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\importar.script'
+                    )
+
+                    echo "========================================"
+                    echo "IRIS SESSION - EXIT CODE: ${exitCode}"
+                    echo "========================================"
+
+
+                    // ========================================
+                    // Verifica se o IRIS criou o arquivo
+                    // ========================================
+                    def arquivoExiste = bat(
+                        returnStatus: true,
+                        script: 'if exist "D:\\IRIS_Server\\deploy_status.txt" (exit /b 0) else (exit /b 1)'
+                    )
+
+                    if (arquivoExiste != 0) {
+                        error "O IRIS não gerou o arquivo deploy_status.txt."
                     }
+
+
+                    // ========================================
+                    // Lê o resultado gerado pelo IRIS
+                    // ========================================
+                    def statusDeploy = bat(
+                        returnStdout: true,
+                        script: '@type "D:\\IRIS_Server\\deploy_status.txt"'
+                    ).trim()
+
+                    echo "========================================"
+                    echo "STATUS DO DEPLOY IRIS: ${statusDeploy}"
+                    echo "========================================"
+
+
+                    // ========================================
+                    // Decide se o deploy foi bem-sucedido
+                    // ========================================
+                    if (statusDeploy != 'OK') {
+                        error "O IRIS informou falha durante o deploy."
+                    }
+
+                    echo "========================================"
+                    echo "DEPLOY REALIZADO COM SUCESSO"
+                    echo "========================================"
                 }
             }
         }
