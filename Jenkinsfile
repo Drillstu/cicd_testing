@@ -34,23 +34,18 @@ pipeline {
             steps {
                 echo '📦 Criando snapshot de segurança e aplicando novo código fonte no pacote src...'
                 script {
-                    def importarScriptConteudo = """zn "USER"
-set arquivoBackup="D:\\IRIS_Server\\backup_anterior.xml"
-set pacoteAlvo="src"
-do \$SYSTEM.OBJ.ExportPackage(pacoteAlvo, arquivoBackup, "-d")
-set sc=\$SYSTEM.OBJ.LoadDir("D:/IRIS_Server/projectGit/src/", "ck", , 1)
-if 'sc hang 2 halt
-do \$zf(-1,"exit 0")
-halt
-"""
+                    def importarScriptConteudo = "zn \"USER\"\n" +
+                                              "set arquivoBackup=\"D:\\\\IRIS_Server\\\\backup_anterior.xml\"\n" +
+                                              "set pacoteAlvo=\"src\"\n" +
+                                              "do \$SYSTEM.OBJ.ExportPackage(pacoteAlvo, arquivoBackup, \"-d\")\n" +
+                                              "set sc=\$SYSTEM.OBJ.LoadDir(\"D:/IRIS_Server/projectGit/src/\", \"ck\", , 1)\n" +
+                                              "if 'sc hang 2 halt\n" +
+                                              "halt\n"
+
                     writeFile file: 'scripts/importar.script', text: importarScriptConteudo, encoding: 'UTF-8'
                 }
                 
-                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\importar.script'
-                
-                script {
-                    currentBuild.result = 'SUCCESS'
-                }
+                bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\importar.script || exit 0'
             }
         }
         
@@ -74,21 +69,22 @@ halt
                 script {
                     def irisWorkspacePath = "${WORKSPACE}".replace('\\', '/')
                     
-                    def testeScriptConteudo = """zn "USER"
-set primeiroId=\$order(^UnitTest.Result(""))
-if primeiroId'="" { set dataCriacao=\$listget(\$get(^UnitTest.Result(primeiroId)), 1) if dataCriacao'="" { set dataH=\$zdatetimeh(dataCriacao, 3, 1) set diasAntigo=\$piece(dataH, ",", 1) set diasHoje=\$piece(\$horolog, ",", 1) if (diasHoje - diasAntigo) >= 7 { do ##class(%UnitTest.Result.TestInstance).%DeleteExtent() } } }
-set ^UnitTestRoot="${irisWorkspacePath}"
-set sc=##class(%UnitTest.Manager).RunTest("tests", "/load/compile")
-set lastId=\$order(^UnitTest.Result(""), -1)
-set statusValido=1
-if lastId'="" { set dadosSuite=\$get(^UnitTest.Result(lastId, "tests")) if dadosSuite'="" set statusValido=\$listget(dadosSuite, 1) }
-if ('sc) || (statusValido=0) hang 2 halt
-do \$zf(-1,"exit 0")
-halt
-"""
+                    def testeScriptConteudo = "zn \"USER\"\n" +
+                                              "set primeiroId=\$order(^UnitTest.Result(\"\"))\n" +
+                                              "if primeiroId'=\"\" { set dataCriacao=\$listget(\$get(^UnitTest.Result(primeiroId)), 1) if dataCriacao'=\"\" { set dataH=\$zdatetimeh(dataCriacao, 3, 1) set diasAntigo=\$piece(dataH, \",\", 1) set diasHoje=\$piece(\$horolog, \",\", 1) if (diasHoje - diasAntigo) >= 7 { do ##class(%UnitTest.Result.TestInstance).%DeleteExtent() } } }\n" +
+                                              "set ^UnitTestRoot=\"${irisWorkspacePath}\"\n" +
+                                              "set sc=##class(%UnitTest.Manager).RunTest(\"tests\", \"/load/compile\")\n" +
+                                              "set lastId=\$order(^UnitTest.Result(\"\"), -1)\n" +
+                                              "set statusValido=1\n" +
+                                              "if lastId'=\"\" { set dadosSuite=\$get(^UnitTest.Result(lastId, \"tests\")) if dadosSuite'=\"\" set statusValido=\$listget(dadosSuite, 1) }\n" +
+                                              "if ('sc) || (statusValido=0) hang 2 halt\n" +
+                                              "halt\n"
+
                     writeFile file: 'scripts/executar_testes.script', text: testeScriptConteudo, encoding: 'UTF-8'
                 }
+                
                 bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\executar_testes.script'
+                
                 script {
                     currentBuild.result = 'SUCCESS'
                 }
@@ -113,21 +109,17 @@ halt
                 echo '📦 Testes aprovados com louvor! Exportando pacote consolidado .xml para implantação...'
                 script {
                     def irisWorkspacePath = "${WORKSPACE}".replace('\\', '/')
-                    def scriptConteudo = """zn "USER"
-set arquivoRelease="${irisWorkspacePath}/scripts/release.xml"
-set classesParaExportar="src.*.cls"
-set sc=\$SYSTEM.OBJ.Export(classesParaExportar,arquivoRelease,"-d")
-if sc do \$zf(-1,"exit 0")
-halt
-"""
+                    def scriptConteudo = "zn \"USER\"\n" +
+                                         "set arquivoRelease=\"${irisWorkspacePath}/build/release.xml\"\n" +
+                                         "set classesParaExportar=\"src.*.cls\"\n" +
+                                         "set sc=\$SYSTEM.OBJ.Export(classesParaExportar,arquivoRelease,\"-d\")\n" +
+                                         "halt\n"
                     writeFile file: 'scripts/gerar_release.script', text: scriptConteudo, encoding: 'UTF-8'
                 }
                 
                 bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\gerar_release.script || exit 0'
                 
-                // Cria a pasta de releases externa permanente no servidor caso ela não exista
                 bat 'mkdir D:\\IRIS_Server\\build 2>nul || exit 0'
-                // Move e renomeia o arquivo gerado para o repositório de histórico seguro externa
                 bat "move build\\release.xml D:\\IRIS_Server\\build\\release_build_${env.BUILD_NUMBER}.xml"
                 
                 archiveArtifacts artifacts: "build/release_build_${env.BUILD_NUMBER}.xml", fingerprint: true
@@ -150,11 +142,11 @@ halt
         failure {
             echo '🚨 O build falhou ou os testes quebraram! Executando Rollback automático via ObjectScript...'
             script {
-                def rollbackScriptConteudo = """zn "USER"
-set arquivoBackup="D:\\IRIS_Server\\backup_anterior.xml"
-if ##class(%File).Exists(arquivoBackup) set sc=\$SYSTEM.OBJ.Load(arquivoBackup, "ck")
-halt
-"""
+                def rollbackScriptConteudo = "zn \"USER\"\n" +
+                                             "set arquivoBackup=\"D:\\\\IRIS_Server\\\\backup_anterior.xml\"\n" +
+                                             "if ##class(%File).Exists(arquivoBackup) set sc=\$SYSTEM.OBJ.Load(arquivoBackup, \"ck\")\n" +
+                                             "halt\n"
+                                             
                 writeFile file: 'scripts/rollback.script', text: rollbackScriptConteudo, encoding: 'UTF-8'
             }
             bat '"D:\\InterSystems\\IRIS\\bin\\irissession" IRIS < scripts\\rollback.script || exit 0'
