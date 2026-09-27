@@ -32,7 +32,7 @@ pipeline {
                 timeout(time: 1, unit: 'MINUTES') 
             }
             steps {
-                echo '📦 Criando snapshot de segurança e aplicando novo código fonte no pacote src...'
+                echo '📦 Criando snapshot de segurança e aplicando novo código novo...'
                 script {
                     def importarScriptConteudo = """zn "USER"
 set arquivoBackup="D:\\IRIS_Server\\backup_anterior.xml"
