@@ -68,14 +68,14 @@ pipeline {
                     // 1. Normaliza as barras do caminho do Workspace para o padrão do IRIS (barras normais /)
                     def irisWorkspacePath = "${WORKSPACE}".replace('\\', '/')
                     
-                    // LÓGICA NATIVA: Instancia o manager, roda o teste, pega o LogIndex atual e checa se o nó de Status da execução foi igual a 0 (Falha)
+                     // SOLUÇÃO PROFISSIONAL: Abre o último objeto de instância de teste persistido para validar o status real de sucesso (Status=1)
                     def testeScriptConteudo = """zn "USER"
                                                 set ^UnitTestRoot="${irisWorkspacePath}"
-                                                set manager=##class(%UnitTest.Manager).%New()
-                                                set sc=manager.RunTest("tests", "/load/compile")
-                                                set idx=manager.LogIndex
-                                                set statusAtual=\$get(^UnitTest.Result(idx))
-                                                if ('sc) || (statusAtual=0) hang 2 halt
+                                                set sc=##class(%UnitTest.Manager).RunTest("tests", "/load/compile")
+                                                set lastId=\$order(^UnitTest.Result(""), -1)
+                                                set statusValido=1
+                                                if lastId'="" { set obj=##class(%UnitTest.Result.TestInstance).%OpenId(lastId) if \$isobject(obj) set statusValido=obj.Status }
+                                                if ('sc) || (statusValido=0) hang 2 halt
                                                 do \$zf(-1,"exit 0")
                                                 halt
                                                 """
