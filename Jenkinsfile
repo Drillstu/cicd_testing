@@ -46,13 +46,10 @@ pipeline {
                                                 "set pacoteAlvo=\"src\"\n" +
                                                 "do \$SYSTEM.OBJ.ExportPackage(pacoteAlvo, arquivoBackup, \"-d\")\n" +
                                                 "set sc=\$SYSTEM.OBJ.LoadDir(\"D:/IRIS_Server/projectGit/src/\", \"ck\", , 1)\n" +
-                                                "if 'sc {\n" +
-                                                "    write \"ERRO_LOADDIR: \",\$SYSTEM.Status.GetErrorText(sc),!\n" +
-                                                "    open arquivoStatus use arquivoStatus write \"ERROR\",! close\n" +
-                                                "} else {\n" +
-                                                "    write \"DEPLOY CONCLUÍDO COM SUCESSO!\",!\n" +
-                                                "    open arquivoStatus use arquivoStatus write \"OK\",! close\n" +
-                                                "}\n" +
+                                                "write \"STATUS LOADDIR: \",sc,!\n" +
+                                                "if 'sc write \"ERRO_LOADDIR: \",\$SYSTEM.Status.GetErrorText(sc),!\n" +
+                                                "if 'sc open arquivoStatus use arquivoStatus write \"ERROR\",! close\n" +
+                                                "if sc open arquivoStatus use arquivoStatus write \"OK\",! close\n" +
                                                 "halt\n"
 
                     writeFile(
