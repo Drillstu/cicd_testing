@@ -70,7 +70,6 @@ pipeline {
                     
                     // ABORDAGEM CANÔNICA: Executa os testes, pega o ID gerado e lê a lista binária mapeada na documentação do IRIS
                     def testeScriptConteudo = """zn "USER"
-                                                do ##class(%UnitTest.Result.TestInstance).%DeleteExtent()
                                                 set ^UnitTestRoot="${irisWorkspacePath}"
                                                 set sc=##class(%UnitTest.Manager).RunTest("tests", "/load/compile")
                                                 set lastId=\$order(^UnitTest.Result(""), -1)
